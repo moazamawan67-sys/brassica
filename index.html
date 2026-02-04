@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="ur" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بلھے شاہ پیکجنگ ٹریکر</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            corePlugins: {
+                preflight: true,
+            }
+        }
+    </script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Noto Nastaliq Urdu', 'Roboto', serif; background-color: #f3f4f6; }
+        .font-roboto { font-family: 'Roboto', sans-serif; }
+        .font-nastaliq { font-family: 'Noto Nastaliq Urdu', serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        
+        /* Input overrides for RTL */
+        input[type="date"], input[type="number"], select { direction: ltr; text-align: center; }
+        
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out; }
+        
+        /* Horizontal scroll for stacks */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="root"></div>
+
+    <script type="module">
+        // Load modules using dynamic imports
+        Promise.all([
+            import('https://esm.sh/react@18.2.0'),
+            import('https://esm.sh/react-dom@18.2.0/client'),
+            import('https://esm.sh/@supabase/supabase-js@2.39.0'),
+            import('https://esm.sh/uuid@9.0.1'),
+            import('https://esm.sh/lucide-react@0.300.0')
+        ]).then(([
+            { default: React, useState, useEffect, useMemo, useCallback, useRef },
+            { createRoot },
+            { createClient },
+            { v4: uuidv4 },
+            lucideReact
+        ]) => {
+            // Extract icons from lucide-react
+            const {
+                Trash2, Edit2, FileDown, Search, BarChart3, 
+                RotateCcw, X
+            } = lucideReact;
+
+            // --- CONSTANTS & CONFIG ---
+            const SUPABASE_URL = 'https://gwrlnukpeeiykpxnlmsd.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3cmxudWtwZWVpeWtweG5sbXNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEwNzQyMDUsImV4cCI6MjA3NjY1MDIwNX0.WQJxd8KqwSCvE62ypdBRdHArl9UZfE4zUXlZRNnnDxc';
+            
+            const DELETE_PASSWORD = 'delete123';
+            const TABLE_NAME = 'mustard_husk_entries';
+
+            const SEASON_LABELS = {
+                'brassica': 'Brassica Straw',
+                'linseed': 'Linseed Straw',
+                'wheat': 'Wheat Straw'
+            };
+
+            const STACK_OPTIONS = Array.from({ length: 50 }, (_, i) => String(i + 1));
+
+            // --- SERVICES ---
+            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+            // --- COMPONENTS ---
+
+            const StatsCards = ({ gross, tare, net, title, colorClass, entryCount }) => (
+                React.createElement('div', { className: `p-4 rounded-xl shadow-md border ${colorClass} mb-4` },
+                    React.createElement('h3', { className: 'text-lg font-bold mb-3 text-center border-b pb-2 opacity-80 font-roboto' }, title),
+                    React.createElement('div', { className: 'grid grid-cols-4 gap-3 text-center' },
+                        React.createElement('div', { className: 'bg-white/60 p-3 rounded-lg' },
+                            React.createElement('p', { className: 'text-xs text-gray-500 mb-1' }, 'Gross Wt'),
+                            React.createElement('p', { className: 'text-base font-bold font-roboto' }, gross.toLocaleString())
+                        ),
+                        React.createElement('div', { className: 'bg-white/60 p-3 rounded-lg' },
+                            React.createElement('p', { className: 'text-xs text-gray-500 mb-1' }, 'Tare Wt'),
+                            React.createElement('p', { className: 'text-base font-bold font-roboto' }, tare.toLocaleString())
+                        ),
+                        React.createElement('div', { className: 'bg-white/80 p-3 rounded-lg border-2 border-green-500/30' },
+                            React.createElement('p', { className: 'text-xs text-green-700 mb-1' }, 'Net Wt'),
+                            React.createElement('p', { className: 'text-lg font-extrabold text-green-700 font-roboto' }, net.toLocaleString())
+                        ),
+                        React.createElement('div', { className: 'bg-blue-50 p-3 rounded-lg border border-blue-200' },
+                            React.createElement('p', { className: 'text-xs text-blue-700 mb-1' }, 'Entries'),
+                            React.createElement('p', { className: 'text-lg font-extrabold text-blue-700 font-roboto' }, entryCount)
+                        )
+                    )
+                )
+            );
+
+            const SeasonSummary = ({ currentSeason, entries, stats }) => (
+                React.createElement('div', { className: 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white rounded-2xl p-6 shadow-xl mb-6 animate-fade-in' },
+                    React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-6 text-center' },
+                        React.createElement('div', { className: 'bg-white/10 p-4 rounded-xl backdrop-blur-sm' },
+                            React.createElement('h3', { className: 'text-sm opacity-80 mb-2' }, 'موجودہ سیزن'),
+                            React.createElement('div', { className: 'text-xl font-bold font-roboto' },
+                                `${SEASON_LABELS[currentSeason.type]} ${currentSeason.year}`
+                            )
+                        ),
+                        React.createElement('div', { className: 'bg-white/10 p-4 rounded-xl backdrop-blur-sm' },
+                            React.createElement('h3', { className: 'text-sm opacity-80 mb-2' }, 'کل اندراجات'),
+                            React.createElement('div', { className: 'text-2xl font-extrabold font-roboto' }, entries.length)
+                        ),
+                        React.createElement('div', { className: 'bg-white/10 p-4 rounded-xl backdrop-blur-sm' },
+                            React.createElement('h3', { className: 'text-sm opacity-80 mb-2' }, 'کل Net Weight'),
+                            React.createElement('div', { className: 'text-2xl font-extrabold font-roboto' },
+                                `${stats.totalNet.toLocaleString()} `,
+                                React.createElement('span', { className: 'text-lg opacity-60' }, 'kg')
+                            )
+                        )
+                    )
+                )
+            );
+
+            const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, password, setPassword, currentSeason, mode }) => {
+                if (!isOpen) return null;
+                const isSingle = mode === 'single';
+
+                return React.createElement('div', { className: 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in' },
+                    React.createElement('div', { className: 'bg-white rounded-xl p-6 w-full max-w-md shadow-2xl transform transition-all scale-100' },
+                        React.createElement('h3', { className: 'text-xl font-bold text-red-600 mb-4 text-center font-nastaliq' },
+                            isSingle ? 'ریکارڈ حذف کریں' : 'ڈیٹا حذف کرنے کی تصدیق'
+                        ),
+                        
+                        React.createElement('div', { className: 'bg-red-50 border border-red-200 rounded-lg p-4 mb-4' },
+                            isSingle ? 
+                                React.createElement('p', { className: 'text-red-700 text-sm text-center font-bold' },
+                                    'کیا آپ واقعی اس ریکارڈ کو حذف کرنا چاہتے ہیں؟'
+                                ) : 
+                                React.createElement('p', { className: 'text-red-700 text-sm text-center font-bold' },
+                                    `${SEASON_LABELS[currentSeason.type]} (${currentSeason.year}) کے تمام ریکارڈز حذف ہونے والے ہیں!`
+                                ),
+                            React.createElement('p', { className: 'text-red-600 text-xs text-center mt-2' },
+                                'یہ عمل واپس نہیں ہو سکے گا!'
+                            )
+                        ),
+
+                        !isSingle && React.createElement('div', { className: 'mb-4' },
+                            React.createElement('label', { className: 'block text-sm font-bold text-gray-700 mb-2 text-right' },
+                                ':تصدیق کے لیے پاسورڈ درج کریں'
+                            ),
+                            React.createElement('input', {
+                                type: 'password',
+                                value: password,
+                                onChange: (e) => setPassword(e.target.value),
+                                placeholder: 'پاسورڈ درج کریں',
+                                className: 'w-full p-3 border-2 border-red-300 rounded-lg text-center font-bold focus:border-red-500 focus:ring-2 focus:ring-red-200 outline-none',
+                                autoFocus: true
+                            }),
+                            React.createElement('p', { className: 'text-xs text-gray-500 mt-2 text-center' },
+                                'حذف کرنے کے لیے درست پاسورڈ درج کریں'
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'flex gap-3' },
+                            React.createElement('button', {
+                                onClick: onClose,
+                                className: 'flex-1 bg-gray-500 text-white py-3 rounded-lg font-bold hover:bg-gray-600 transition-colors shadow'
+                            }, 'منسوخ کریں'),
+                            React.createElement('button', {
+                                onClick: onConfirm,
+                                disabled: !isSingle && password !== DELETE_PASSWORD,
+                                className: `flex-1 py-3 rounded-lg font-bold transition-colors shadow ${(isSingle || password === DELETE_PASSWORD)
+                                    ? 'bg-red-600 text-white hover:bg-red-700' 
+                                    : 'bg-red-300 text-white cursor-not-allowed'}`
+                            }, 'حذف کریں')
+                        )
+                    )
+                );
+            };
+
+            // --- MAIN APP ---
+
+            const App = () => {
+                const [userId] = useState(() => {
+                    const stored = localStorage.getItem('mustardHuskUserId');
+                    if (stored) return stored;
+                    const newId = uuidv4();
+                    localStorage.setItem('mustardHuskUserId', newId);
+                    return newId;
+                });
+
+                const [currentSeason, setCurrentSeason] = useState(() => {
+                    const stored = localStorage.getItem('currentSeason');
+                    return stored ? JSON.parse(stored) : { type: 'brassica', year: new Date().getFullYear() };
+                });
+
+                const [entries, setEntries] = useState([]);
+                const [loading, setLoading] = useState(true);
+                const [message, setMessage] = useState(null);
+
+                const [showDeleteModal, setShowDeleteModal] = useState(false);
+                const [deletePassword, setDeletePassword] = useState('');
+                const [deleteMode, setDeleteMode] = useState('all');
+                const [itemToDelete, setItemToDelete] = useState(null);
+
+                const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+                const [tareWt, setTareWt] = useState('');
+                const [grossWt, setGrossWt] = useState('');
+                const [stackNo, setStackNo] = useState('1');
+                const [editingId, setEditingId] = useState(null);
+
+                const [showSearch, setShowSearch] = useState(false);
+                const [showSeasonSummary, setShowSeasonSummary] = useState(() => {
+                    const stored = localStorage.getItem('showSeasonSummary');
+                    return stored ? JSON.parse(stored) : true;
+                });
+                const [searchFilters, setSearchFilters] = useState({ date: '', epNo: '', stackNo: '' });
+                
+                const [displayType, setDisplayType] = useState('current');
+                const [displayStartDate, setDisplayStartDate] = useState('');
+                const [displayEndDate, setDisplayEndDate] = useState('');
+                const [displayStack, setDisplayStack] = useState('');
+
+                const [exportType, setExportType] = useState('current');
+                const [exportStartDate, setExportStartDate] = useState('');
+                const [exportEndDate, setExportEndDate] = useState('');
+
+                const seasonKey = useMemo(() => `${currentSeason.type}_${currentSeason.year}`, [currentSeason]);
+
+                const isValidWeight = (weight) => {
+                    const w = Number(weight);
+                    if (!weight || isNaN(w)) return false;
+                    const lastDigit = w % 10;
+                    return lastDigit === 0 || lastDigit === 5;
+                };
+
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return '-';
+                    const parts = dateStr.split('-');
+                    if (parts.length !== 3) return dateStr;
+                    const [year, month, day] = parts;
+                    return `${day}/${month}/${year}`;
+                };
+
+                const getDisplayText = () => {
+                    if (displayType === 'all') return 'تمام ڈیٹا (All Data)';
+                    if (displayType === 'dateRange') {
+                        if (displayStartDate && displayEndDate) return `${formatDate(displayStartDate)} to ${formatDate(displayEndDate)}`;
+                        return 'Select Date Range below';
+                    }
+                    if (displayType === 'stack') {
+                        return displayStack ? `Stack #${displayStack}` : 'All Stacks';
+                    }
+                    return `Today (${formatDate(date)})`;
+                };
+
+                const fetchData = useCallback(async () => {
+                    setLoading(true);
+                    try {
+                        console.log("Fetching data from Supabase...");
+                        console.log("User ID:", userId);
+                        console.log("Season Key:", seasonKey);
+                        
+                        // First, let's check if the table exists and what columns it has
+                        const { data, error } = await supabase
+                            .from(TABLE_NAME)
+                            .select('*')
+                            .eq('user_id', userId)
+                            .eq('season', seasonKey)
+                            .order('ep_no', { ascending: true });
+
+                        if (error) {
+                            console.error("Supabase Error Details:", error);
+                            
+                            // If there's an error, try a simpler query to see what's wrong
+                            const { data: simpleData, error: simpleError } = await supabase
+                                .from(TABLE_NAME)
+                                .select('id')
+                                .limit(1);
+                                
+                            if (simpleError) {
+                                console.error("Simple query also failed:", simpleError);
+                                throw new Error(`Database error: ${simpleError.message}`);
+                            }
+                            
+                            console.log("Simple query succeeded, table exists");
+                            setEntries([]); // Set empty array if no data
+                            return;
+                        }
+                        
+                        console.log("Fetched Data:", data);
+                        setEntries(data || []);
+                    } catch (err) {
+                        console.error("Fetch Data Error:", err);
+                        setMessage({ type: 'error', text: 'ڈیٹا لوڈ کرنے میں ناکامی۔ ممکن ہے کہ ڈیٹا بیس میں کچھ مسئلہ ہے۔' });
+                        setEntries([]); // Set empty array on error
+                    } finally {
+                        setLoading(false);
+                    }
+                }, [userId, seasonKey]);
+
+                useEffect(() => {
+                    fetchData();
+                    localStorage.setItem('currentSeason', JSON.stringify(currentSeason));
+                }, [fetchData, currentSeason]);
+
+                useEffect(() => {
+                    localStorage.setItem('showSeasonSummary', JSON.stringify(showSeasonSummary));
+                }, [showSeasonSummary]);
+
+                const stats = useMemo(() => {
+                    const dailyEntries = entries.filter(e => e.date === date);
+                    const totalNet = entries.reduce((sum, e) => sum + e.net_wt, 0);
+                    
+                    const daily = dailyEntries.reduce((acc, e) => ({
+                        gross: acc.gross + e.gross_wt,
+                        tare: acc.tare + e.tare_wt,
+                        net: acc.net + e.net_wt,
+                        count: acc.count + 1
+                    }), { gross: 0, tare: 0, net: 0, count: 0 });
+
+                    const stacks = entries.reduce((acc, e) => {
+                        const s = e.stack_no;
+                        if (!acc[s]) acc[s] = { net: 0, count: 0 };
+                        acc[s].net += e.net_wt;
+                        acc[s].count += 1;
+                        return acc;
+                    }, {});
+
+                    return { totalNet, daily, stacks };
+                }, [entries, date]);
+
+                const searchResults = useMemo(() => {
+                    const { date, epNo, stackNo } = searchFilters;
+                    if (!date && !epNo && !stackNo) return [];
+
+                    return entries.filter(entry => {
+                        const matchDate = date ? entry.date === date : true;
+                        const matchEp = epNo ? entry.ep_no.toString().includes(epNo) : true;
+                        const matchStack = stackNo ? entry.stack_no === stackNo : true;
+                        return matchDate && matchEp && matchStack;
+                    });
+                }, [entries, searchFilters]);
+
+                const searchSummary = useMemo(() => {
+                    if (searchResults.length === 0) return null;
+                    return searchResults.reduce((acc, e) => ({
+                        gross: acc.gross + e.gross_wt,
+                        tare: acc.tare + e.tare_wt,
+                        net: acc.net + e.net_wt,
+                        count: acc.count + 1
+                    }), { gross: 0, tare: 0, net: 0, count: 0 });
+                }, [searchResults]);
+
+                const handleDeleteClick = (id, e) => {
+                    if (e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }
+                    setDeleteMode('single');
+                    setItemToDelete(id);
+                    setShowDeleteModal(true);
+                };
+
+                const handleDeleteConfirm = async () => {
+                    if (deleteMode === 'all') {
+                        await handleDeleteAll();
+                    } else {
+                        await handleSingleDelete();
+                    }
+                };
+
+                const handleSingleDelete = async () => {
+                    if (!itemToDelete) return;
+                    try {
+                        const { error } = await supabase
+                            .from(TABLE_NAME)
+                            .delete()
+                            .eq('id', itemToDelete)
+                            .eq('user_id', userId);
+                        
+                        if (error) throw error;
+                        
+                        setMessage({ type: 'success', text: 'ریکارڈ حذف ہو گیا ہے۔' });
+                        setEntries(prev => prev.filter(entry => entry.id !== itemToDelete));
+                        setShowDeleteModal(false);
+                        setItemToDelete(null);
+                    } catch (err) {
+                        console.error("Delete failed:", err);
+                        setMessage({ type: 'error', text: 'حذف کرنے میں ناکامی: ' + err.message });
+                    }
+                };
+
+                const handleDeleteAll = async () => {
+                    if (deletePassword !== DELETE_PASSWORD) {
+                        setMessage({ type: 'error', text: 'غلط پاسورڈ! ڈیٹا حذف نہیں کیا جا سکا۔' });
+                        return;
+                    }
+
+                    try {
+                        const { error } = await supabase
+                            .from(TABLE_NAME)
+                            .delete()
+                            .eq('user_id', userId)
+                            .eq('season', seasonKey);
+                            
+                        if (error) throw error;
+                        
+                        setMessage({ type: 'success', text: 'تمام ریکارڈز حذف ہو گئے ہیں۔' });
+                        setShowDeleteModal(false);
+                        setDeletePassword('');
+                        fetchData();
+                    } catch (err) {
+                        console.error(err);
+                        setMessage({ type: 'error', text: 'حذف کرنے میں ناکامی۔' });
+                    }
+                };
+
+                const handleSubmit = async (e) => {
+                    e.preventDefault();
+                    const tare = Number(tareWt);
+                    const gross = Number(grossWt);
+                    const net = gross - tare;
+
+                    if (!gross || !tare || gross <= tare) {
+                        setMessage({ type: 'error', text: 'وزن درست نہیں ہے۔ Gross وزن Tare سے زیادہ ہونا چاہیے۔' });
+                        return;
+                    }
+
+                    if (!isValidWeight(gross) || !isValidWeight(tare) || !isValidWeight(net)) {
+                        setMessage({ type: 'error', text: 'تمام وزن 5 کے بند میں ہونے چاہئیں۔' });
+                        return;
+                    }
+
+                    try {
+                        if (editingId) {
+                            const { error } = await supabase
+                                .from(TABLE_NAME)
+                                .update({ 
+                                    date, 
+                                    gross_wt: gross, 
+                                    tare_wt: tare, 
+                                    net_wt: net, 
+                                    stack_no: stackNo 
+                                })
+                                .eq('id', editingId)
+                                .eq('user_id', userId);
+                                
+                            if (error) {
+                                console.error("Update Error Details:", error);
+                                throw new Error(`Update failed: ${error.message}`);
+                            }
+                            setMessage({ type: 'success', text: 'اپ ڈیٹ ہو گیا۔' });
+                            setEditingId(null);
+                        } else {
+                            const maxEp = entries.length > 0 ? Math.max(...entries.map(e => e.ep_no)) : 0;
+                            const todayEntries = entries.filter(e => e.date === date);
+                            const nextSr = todayEntries.length + 1;
+
+                            const entryData = {
+                                date, 
+                                sr_no: nextSr, 
+                                ep_no: maxEp + 1, 
+                                gross_wt: gross, 
+                                tare_wt: tare, 
+                                net_wt: net,
+                                stack_no: stackNo, 
+                                season: seasonKey, 
+                                user_id: userId, 
+                                app_id: 'mustard_husk_tracker',
+                                created_at: new Date().toISOString()
+                            };
+
+                            console.log("Inserting data:", entryData);
+
+                            const { data, error } = await supabase
+                                .from(TABLE_NAME)
+                                .insert(entryData)
+                                .select();
+                            
+                            if (error) {
+                                console.error("Insert Error Details:", error);
+                                throw new Error(`Insert failed: ${error.message}`);
+                            }
+                            
+                            console.log("Insert successful, returned data:", data);
+                            setMessage({ type: 'success', text: 'محفوظ ہو گیا۔' });
+                        }
+                        setGrossWt(''); 
+                        setTareWt('');
+                        fetchData();
+                    } catch (err) {
+                        console.error("Submit Error Details:", err);
+                        setMessage({ type: 'error', text: 'غلطی: ' + err.message });
+                    }
+                };
+
+                const downloadCSV = () => {
+                    let dataToExport = [];
+                    let suffix = '';
+                    
+                    if (exportType === 'all') {
+                        dataToExport = entries;
+                        suffix = 'all';
+                    } else if (exportType === 'dateRange') {
+                        if (!exportStartDate || !exportEndDate) {
+                            setMessage({ type: 'error', text: 'تاریخ منتخب کریں۔' });
+                            return;
+                        }
+                        dataToExport = entries.filter(e => e.date >= exportStartDate && e.date <= exportEndDate);
+                        suffix = `${exportStartDate}_to_${exportEndDate}`;
+                    } else {
+                        dataToExport = entries.filter(e => e.date === date);
+                        suffix = date;
+                    }
+
+                    if (dataToExport.length === 0) {
+                        setMessage({ type: 'error', text: 'ڈیٹا موجود نہیں' });
+                        return;
+                    }
+
+                    const headers = ['SR No', 'Ep No', 'Date', 'Gross Wt', 'Tare Wt', 'Net Wt', 'Stack No', 'Season'];
+                    const rows = dataToExport.map(e => [
+                        e.sr_no, 
+                        e.ep_no, 
+                        formatDate(e.date), 
+                        e.gross_wt, 
+                        e.tare_wt, 
+                        e.net_wt, 
+                        e.stack_no, 
+                        SEASON_LABELS[e.season.split('_')[0]]
+                    ]);
+                    
+                    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `data_${suffix}.csv`;
+                    link.click();
+                };
+
+                const displayData = useMemo(() => {
+                    if (displayType === 'all') return entries;
+                    if (displayType === 'dateRange') {
+                        if (!displayStartDate || !displayEndDate) return entries;
+                        return entries.filter(e => e.date >= displayStartDate && e.date <= displayEndDate);
+                    }
+                    if (displayType === 'stack') {
+                        if (!displayStack) return entries;
+                        return entries.filter(e => e.stack_no === displayStack);
+                    }
+                    return entries.filter(e => e.date === date);
+                }, [entries, displayType, displayStartDate, displayEndDate, displayStack, date]);
+
+                const weightValidation = useMemo(() => ({
+                    tare: isValidWeight(tareWt),
+                    gross: isValidWeight(grossWt),
+                    net: isValidWeight(Number(grossWt) - Number(tareWt))
+                }), [tareWt, grossWt]);
+
+                // The main render function
+                return React.createElement('div', { className: 'min-h-screen pb-12 font-roboto bg-gray-50 text-gray-800' },
+                    // Header
+                    React.createElement('header', { className: 'bg-gradient-to-r from-indigo-800 to-indigo-600 text-white p-4 shadow-lg mb-6 sticky top-0 z-40' },
+                        React.createElement('div', { className: 'max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3' },
+                            React.createElement('div', { className: 'text-center md:text-right' },
+                                React.createElement('h1', { className: 'text-xl font-bold font-nastaliq' }, 'بلھے شاہ پیکجنگ ٹریکر'),
+                                React.createElement('p', { className: 'text-sm opacity-80 mt-1' }, `${SEASON_LABELS[currentSeason.type]} ${currentSeason.year}`)
+                            ),
+                            React.createElement('div', { className: 'flex flex-col md:flex-row gap-2 items-center' },
+                                React.createElement('div', { className: 'flex gap-2 bg-white/10 p-1 rounded-lg' },
+                                    React.createElement('select', {
+                                        className: 'bg-indigo-900 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-white',
+                                        value: currentSeason.type,
+                                        onChange: e => setCurrentSeason({...currentSeason, type: e.target.value})
+                                    },
+                                        Object.entries(SEASON_LABELS).map(([k,v]) => 
+                                            React.createElement('option', { key: k, value: k }, v)
+                                        )
+                                    ),
+                                    React.createElement('select', {
+                                        className: 'bg-indigo-900 rounded px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-white',
+                                        value: currentSeason.year,
+                                        onChange: e => setCurrentSeason({...currentSeason, year: Number(e.target.value)})
+                                    },
+                                        [0,1,2].map(i => 
+                                            React.createElement('option', { key: i, value: 2025+i }, 2025+i)
+                                        )
+                                    )
+                                ),
+                                React.createElement('div', { className: 'flex gap-2' },
+                                    React.createElement('button', {
+                                        onClick: () => setShowSeasonSummary(!showSeasonSummary),
+                                        className: `px-3 py-1 rounded text-sm font-medium flex items-center gap-1 transition-colors ${showSeasonSummary ? 'bg-white text-indigo-800' : 'bg-indigo-700 hover:bg-indigo-600'}`
+                                    },
+                                        React.createElement(BarChart3, { size: 16 }),
+                                        ' سیزن'
+                                    ),
+                                    React.createElement('button', {
+                                        onClick: () => setShowSearch(!showSearch),
+                                        className: `px-3 py-1 rounded text-sm font-medium flex items-center gap-1 transition-colors ${showSearch ? 'bg-white text-indigo-800' : 'bg-indigo-700 hover:bg-indigo-600'}`
+                                    },
+                                        React.createElement(Search, { size: 16 }),
+                                        ' تلاش'
+                                    )
+                                )
+                            )
+                        )
+                    ),
+
+                    React.createElement('main', { className: 'max-w-6xl mx-auto px-4' },
+                        message && React.createElement('div', {
+                            className: `p-3 rounded-lg mb-4 text-center text-sm font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2 ${message.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'}`
+                        },
+                            message.text,
+                            React.createElement('button', {
+                                onClick: () => setMessage(null),
+                                className: 'ml-2 hover:opacity-70'
+                            },
+                                React.createElement(RotateCcw, { size: 14 })
+                            )
+                        ),
+
+                        showSeasonSummary && React.createElement(SeasonSummary, {
+                            currentSeason,
+                            entries,
+                            stats
+                        }),
+
+                        // Total Net Card
+                        React.createElement('div', {
+                            className: 'bg-indigo-900 text-white rounded-xl p-4 shadow-lg mb-4 text-center transform hover:scale-[1.01] transition-transform'
+                        },
+                            React.createElement('h2', { className: 'text-lg opacity-80 mb-1' }, 'کل مجموعی وزن'),
+                            React.createElement('div', { className: 'text-4xl font-extrabold' },
+                                `${stats.totalNet.toLocaleString()} `,
+                                React.createElement('span', { className: 'text-xl opacity-60' }, 'kg')
+                            )
+                        ),
+
+                        // Search Section
+                        showSearch && React.createElement('div', {
+                            className: 'bg-amber-50 border-2 border-amber-200 rounded-xl p-4 mb-6 shadow-md animate-fade-in relative'
+                        },
+                            React.createElement('button', {
+                                onClick: () => setShowSearch(false),
+                                className: 'absolute top-2 left-2 text-amber-800 hover:bg-amber-200 rounded-full p-1'
+                            },
+                                React.createElement(X, { size: 16 })
+                            ),
+                            React.createElement('div', { className: 'flex justify-between items-center mb-3 pt-2' },
+                                React.createElement('h3', {
+                                    className: 'font-bold text-amber-900 flex items-center gap-2'
+                                },
+                                    React.createElement(Search, { size: 18 }),
+                                    ' تلاش کریں (Search Records)'
+                                ),
+                                React.createElement('button', {
+                                    onClick: () => setSearchFilters({date:'', epNo:'', stackNo:''}),
+                                    className: 'text-red-600 text-xs font-bold hover:underline flex items-center gap-1'
+                                },
+                                    React.createElement(RotateCcw, { size: 12 }),
+                                    'Clear Filters'
+                                )
+                            ),
+                            React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-3 gap-3 mb-3' },
+                                React.createElement('input', {
+                                    type: 'date',
+                                    className: 'p-2 rounded border border-amber-300 text-sm focus:ring-amber-500 outline-none',
+                                    value: searchFilters.date,
+                                    onChange: e => setSearchFilters({...searchFilters, date: e.target.value})
+                                }),
+                                React.createElement('input', {
+                                    type: 'text',
+                                    placeholder: 'Ep No',
+                                    className: 'p-2 rounded border border-amber-300 text-sm focus:ring-amber-500 outline-none text-right',
+                                    value: searchFilters.epNo,
+                                    onChange: e => setSearchFilters({...searchFilters, epNo: e.target.value})
+                                }),
+                                React.createElement('select', {
+                                    className: 'p-2 rounded border border-amber-300 text-sm focus:ring-amber-500 outline-none',
+                                    value: searchFilters.stackNo,
+                                    onChange: e => setSearchFilters({...searchFilters, stackNo: e.target.value})
+                                },
+                                    React.createElement('option', { value: '' }, 'All Stacks'),
+                                    STACK_OPTIONS.map(o => 
+                                        React.createElement('option', { key: o, value: o }, o)
+                                    )
+                                )
+                            ),
+
+                            searchSummary && React.createElement('div', { className: 'mt-3' },
+                                React.createElement('div', { className: 'grid grid-cols-4 gap-2 mb-3 text-center text-xs' },
+                                    React.createElement('div', {
+                                        className: 'bg-white p-2 rounded shadow-sm border border-amber-100'
+                                    }, 'Count: ', React.createElement('b', null, searchSummary.count)),
+                                    React.createElement('div', {
+                                        className: 'bg-white p-2 rounded shadow-sm border border-amber-100'
+                                    }, 'Gross: ', React.createElement('b', null, searchSummary.gross.toLocaleString())),
+                                    React.createElement('div', {
+                                        className: 'bg-white p-2 rounded shadow-sm border border-amber-100'
+                                    }, 'Tare: ', React.createElement('b', null, searchSummary.tare.toLocaleString())),
+                                    React.createElement('div', {
+                                        className: 'bg-emerald-100 p-2 rounded border border-emerald-300 text-emerald-800 shadow-sm'
+                                    }, 'Net: ', React.createElement('b', null, searchSummary.net.toLocaleString()))
+                                ),
+                                React.createElement('div', {
+                                    className: 'max-h-60 overflow-y-auto bg-white rounded-lg shadow-inner custom-scrollbar border border-amber-100'
+                                },
+                                    React.createElement('table', { className: 'w-full text-xs text-right' },
+                                        React.createElement('thead', {
+                                            className: 'bg-amber-100 sticky top-0 text-amber-900 font-bold z-10'
+                                        },
+                                            React.createElement('tr', null,
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'SR#'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Ep#'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Date'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Net'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Gross'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Tare'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Stack'),
+                                                React.createElement('th', { className: 'p-2 text-center whitespace-nowrap' }, 'Act')
+                                            )
+                                        ),
+                                        React.createElement('tbody', { className: 'divide-y divide-amber-50' },
+                                            searchResults.map(e => 
+                                                React.createElement('tr', {
+                                                    key: e.id,
+                                                    className: 'hover:bg-amber-50/50 transition-colors'
+                                                },
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap font-bold'
+                                                    }, e.sr_no),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-500'
+                                                    }, e.ep_no),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, e.date ? formatDate(e.date) : '-'),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 font-bold text-emerald-700 whitespace-nowrap'
+                                                    }, e.net_wt?.toLocaleString() || '-'),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, Number(e.gross_wt).toLocaleString()),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, Number(e.tare_wt).toLocaleString()),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap'
+                                                    }, e.stack_no),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 text-center flex justify-center gap-2 whitespace-nowrap'
+                                                    },
+                                                        React.createElement('button', {
+                                                            onClick: () => { 
+                                                                setEditingId(e.id); 
+                                                                setDate(e.date); 
+                                                                setGrossWt(e.gross_wt.toString()); 
+                                                                setTareWt(e.tare_wt.toString()); 
+                                                                setStackNo(e.stack_no); 
+                                                                setShowSearch(false);
+                                                                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                                                            },
+                                                            className: 'text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1 rounded transition-colors',
+                                                            title: 'Edit'
+                                                        },
+                                                            React.createElement(Edit2, { size: 16 })
+                                                        ),
+                                                        React.createElement('button', {
+                                                            onClick: (ev) => handleDeleteClick(e.id, ev),
+                                                            className: 'text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded transition-colors',
+                                                            title: 'Delete'
+                                                        },
+                                                            React.createElement(Trash2, { size: 16 })
+                                                        )
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+                            (!searchFilters.date && !searchFilters.epNo && !searchFilters.stackNo) && 
+                                React.createElement('p', {
+                                    className: 'text-xs text-amber-700 text-center italic mt-2 opacity-70'
+                                }, 'Enter details above to search records...'),
+                            (searchResults.length === 0 && (searchFilters.date || searchFilters.epNo || searchFilters.stackNo)) && 
+                                React.createElement('p', {
+                                    className: 'text-xs text-red-500 text-center mt-3 font-bold bg-red-50 p-2 rounded'
+                                }, 'No records found matching these filters.')
+                        ),
+
+                        React.createElement(StatsCards, {
+                            title: `آج کا خلاصہ (${formatDate(date)})`,
+                            colorClass: 'bg-blue-50 border-blue-200',
+                            gross: stats.daily.gross,
+                            tare: stats.daily.tare,
+                            net: stats.daily.net,
+                            entryCount: stats.daily.count
+                        }),
+
+                        // Horizontal Stacks
+                        React.createElement('div', {
+                            className: 'bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100'
+                        },
+                            React.createElement('h3', {
+                                className: 'text-center font-bold text-indigo-900 border-b pb-2 mb-3 text-base'
+                            }, 'سٹاک نمبر'),
+                            React.createElement('div', { className: 'overflow-x-auto no-scrollbar' },
+                                React.createElement('div', { className: 'flex gap-3 pb-2 min-w-max' },
+                                    Object.entries(stats.stacks).sort((a,b) => Number(a[0])-Number(b[0])).map(([s, d]) =>
+                                        React.createElement('div', {
+                                            key: s,
+                                            className: 'bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-lg p-3 text-center min-w-[120px] flex-shrink-0 shadow-sm hover:shadow-md transition-shadow'
+                                        },
+                                            React.createElement('h4', {
+                                                className: 'text-purple-800 font-bold text-sm'
+                                            }, `Stack # ${s}`),
+                                            React.createElement('div', {
+                                                className: 'text-lg font-extrabold text-emerald-600'
+                                            }, d.net.toLocaleString()),
+                                            React.createElement('p', {
+                                                className: 'text-xs text-gray-500 mt-1'
+                                            }, `(${d.count} entries)`)
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'grid grid-cols-1 gap-6' },
+                            // Input Form
+                            React.createElement('div', {
+                                className: 'bg-white rounded-lg shadow-md p-4 border border-gray-100'
+                            },
+                                React.createElement('h2', {
+                                    className: 'text-lg font-bold mb-3 flex items-center gap-2'
+                                },
+                                    editingId ? 
+                                        React.createElement(Edit2, { size: 18, className: 'text-blue-500' }) : 
+                                        'نیا اندراج (New Entry)'
+                                ),
+                                
+                                React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' },
+                                    React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                                        React.createElement('div', null,
+                                            React.createElement('label', {
+                                                className: 'text-xs font-bold text-gray-600 block mb-1'
+                                            }, 'Date'),
+                                            React.createElement('input', {
+                                                type: 'date',
+                                                required: true,
+                                                value: date,
+                                                onChange: e => setDate(e.target.value),
+                                                className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
+                                            })
+                                        ),
+                                        React.createElement('div', null,
+                                            React.createElement('label', {
+                                                className: 'text-xs font-bold text-gray-600 block mb-1'
+                                            }, 'Stack'),
+                                            React.createElement('select', {
+                                                value: stackNo,
+                                                onChange: e => setStackNo(e.target.value),
+                                                className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
+                                            },
+                                                STACK_OPTIONS.map(o => 
+                                                    React.createElement('option', { key: o, value: o }, o)
+                                                )
+                                            )
+                                        )
+                                    ),
+                                    React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                                        React.createElement('div', null,
+                                            React.createElement('label', {
+                                                className: 'text-xs font-bold text-gray-600 block mb-1'
+                                            }, 'Tare (kg)'),
+                                            React.createElement('input', {
+                                                type: 'number',
+                                                required: true,
+                                                placeholder: '0',
+                                                value: tareWt,
+                                                onChange: e => setTareWt(e.target.value),
+                                                className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
+                                                    tareWt && !weightValidation.tare ? 'border-red-300 bg-red-50 focus:ring-red-200' : 
+                                                    weightValidation.tare ? 'border-green-300 bg-green-50 focus:ring-green-200' : 'border-gray-300 bg-white focus:ring-indigo-200'
+                                                }`
+                                            }),
+                                            tareWt && !weightValidation.tare && 
+                                                React.createElement('p', {
+                                                    className: 'text-[10px] text-red-600 mt-1'
+                                                }, '❌ 5 کے بند میں')
+                                        ),
+                                        React.createElement('div', null,
+                                            React.createElement('label', {
+                                                className: 'text-xs font-bold text-gray-600 block mb-1'
+                                            }, 'Gross (kg)'),
+                                            React.createElement('input', {
+                                                type: 'number',
+                                                required: true,
+                                                placeholder: '0',
+                                                value: grossWt,
+                                                onChange: e => setGrossWt(e.target.value),
+                                                className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
+                                                    grossWt && !weightValidation.gross ? 'border-red-300 bg-red-50 focus:ring-red-200' : 
+                                                    weightValidation.gross ? 'border-green-300 bg-green-50 focus:ring-green-200' : 'border-gray-300 bg-white focus:ring-indigo-200'
+                                                }`
+                                            }),
+                                            grossWt && !weightValidation.gross && 
+                                                React.createElement('p', {
+                                                    className: 'text-[10px] text-red-600 mt-1'
+                                                }, '❌ 5 کے بند میں')
+                                        )
+                                    ),
+                                    
+                                    React.createElement('div', {
+                                        className: `p-3 text-center rounded-lg font-bold text-sm transition-colors ${
+                                            weightValidation.net ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                        }`
+                                    },
+                                        `Net: ${(Number(grossWt)-Number(tareWt)).toLocaleString()} kg`,
+                                        weightValidation.net && 
+                                            React.createElement('span', { className: 'ml-2' }, '✅')
+                                    ),
+                                    
+                                    React.createElement('button', {
+                                        disabled: loading || !weightValidation.tare || !weightValidation.gross || !weightValidation.net,
+                                        className: `w-full py-3 rounded-lg font-bold shadow-md transition-all text-sm flex justify-center items-center gap-2 ${
+                                            (weightValidation.tare && weightValidation.gross && weightValidation.net) 
+                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg' 
+                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        }`
+                                    },
+                                        loading ? 'Processing...' : 'محفوظ کریں (Save)'
+                                    )
+                                )
+                            ),
+
+                            // Data Display
+                            React.createElement('div', {
+                                className: 'bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden'
+                            },
+                                React.createElement('div', {
+                                    className: 'p-4 bg-gray-50 border-b flex flex-col md:flex-row justify-between items-center gap-3'
+                                },
+                                    React.createElement('div', null,
+                                        React.createElement('h2', {
+                                            className: 'font-bold text-indigo-900 text-base'
+                                        }, 'Data History'),
+                                        React.createElement('p', {
+                                            className: 'text-xs text-indigo-600 mt-1 font-bold'
+                                        }, getDisplayText())
+                                    ),
+                                    
+                                    React.createElement('div', {
+                                        className: 'flex flex-col gap-2 w-full md:w-auto'
+                                    },
+                                        React.createElement('select', {
+                                            value: displayType,
+                                            onChange: e => setDisplayType(e.target.value),
+                                            className: 'p-2 border rounded text-xs bg-white focus:ring-1 focus:ring-indigo-500 outline-none'
+                                        },
+                                            React.createElement('option', { value: 'current' }, "Today's Data"),
+                                            React.createElement('option', { value: 'all' }, 'All Data'),
+                                            React.createElement('option', { value: 'dateRange' }, 'Date Range'),
+                                            React.createElement('option', { value: 'stack' }, 'By Stack')
+                                        ),
+                                        displayType === 'dateRange' && 
+                                            React.createElement('div', {
+                                                className: 'flex gap-1 items-center bg-gray-100 p-1 rounded'
+                                            },
+                                                React.createElement('div', { className: 'flex flex-col w-full' },
+                                                    React.createElement('span', {
+                                                        className: 'text-[10px] text-gray-500 px-1'
+                                                    }, 'From'),
+                                                    React.createElement('input', {
+                                                        type: 'date',
+                                                        value: displayStartDate,
+                                                        onChange: e => setDisplayStartDate(e.target.value),
+                                                        className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
+                                                    })
+                                                ),
+                                                React.createElement('div', { className: 'flex flex-col w-full' },
+                                                    React.createElement('span', {
+                                                        className: 'text-[10px] text-gray-500 px-1'
+                                                    }, 'To'),
+                                                    React.createElement('input', {
+                                                        type: 'date',
+                                                        value: displayEndDate,
+                                                        onChange: e => setDisplayEndDate(e.target.value),
+                                                        className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
+                                                    })
+                                                )
+                                            ),
+                                        displayType === 'stack' && 
+                                            React.createElement('select', {
+                                                value: displayStack,
+                                                onChange: e => setDisplayStack(e.target.value),
+                                                className: 'p-1 border rounded text-xs w-full'
+                                            },
+                                                React.createElement('option', { value: '' }, 'All Stacks'),
+                                                STACK_OPTIONS.map(o => 
+                                                    React.createElement('option', { key: o, value: o }, o)
+                                                )
+                                            )
+                                    )
+                                ),
+                                
+                                React.createElement('div', {
+                                    className: 'overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar'
+                                },
+                                    React.createElement('table', { className: 'w-full text-xs text-right' },
+                                        React.createElement('thead', {
+                                            className: 'bg-indigo-600 text-white font-bold border-b sticky top-0 z-10'
+                                        },
+                                            React.createElement('tr', null,
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'SR#'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Ep#'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Date'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Gross'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Tare'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Net'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Stack'),
+                                                React.createElement('th', { className: 'p-2 text-center whitespace-nowrap' }, 'Action')
+                                            )
+                                        ),
+                                        React.createElement('tbody', { className: 'divide-y divide-gray-100' },
+                                            displayData.map(entry => 
+                                                React.createElement('tr', {
+                                                    key: entry.id,
+                                                    className: 'hover:bg-indigo-50/50 transition-colors'
+                                                },
+                                                    React.createElement('td', {
+                                                        className: 'p-2 font-bold text-gray-700 whitespace-nowrap'
+                                                    }, entry.sr_no),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 text-gray-500 whitespace-nowrap'
+                                                    }, entry.ep_no),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, entry.date ? formatDate(entry.date) : '-'),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, Number(entry.gross_wt).toLocaleString()),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 whitespace-nowrap text-gray-700'
+                                                    }, Number(entry.tare_wt).toLocaleString()),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 font-bold text-emerald-600 whitespace-nowrap'
+                                                    }, entry.net_wt.toLocaleString()),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 text-center whitespace-nowrap'
+                                                    },
+                                                        React.createElement('span', {
+                                                            className: 'bg-gray-100 px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-700 border border-gray-200'
+                                                        }, entry.stack_no)
+                                                    ),
+                                                    React.createElement('td', {
+                                                        className: 'p-2 flex justify-center gap-2 whitespace-nowrap'
+                                                    },
+                                                        React.createElement('button', {
+                                                            onClick: () => { 
+                                                                setEditingId(entry.id); 
+                                                                setDate(entry.date); 
+                                                                setGrossWt(entry.gross_wt.toString()); 
+                                                                setTareWt(entry.tare_wt.toString()); 
+                                                                setStackNo(entry.stack_no); 
+                                                                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                                                            },
+                                                            className: 'text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 p-1 rounded',
+                                                            title: 'Edit'
+                                                        },
+                                                            React.createElement(Edit2, { size: 16 })
+                                                        ),
+                                                        React.createElement('button', {
+                                                            type: 'button',
+                                                            onClick: (e) => handleDeleteClick(entry.id, e),
+                                                            className: 'text-red-500 hover:text-red-700 transition-colors bg-red-50 hover:bg-red-100 p-1 rounded',
+                                                            title: 'Delete'
+                                                        },
+                                                            React.createElement(Trash2, { size: 16 })
+                                                        )
+                                                    )
+                                                )
+                                            ),
+                                            displayData.length === 0 && 
+                                                React.createElement('tr', null,
+                                                    React.createElement('td', {
+                                                        colSpan: 8,
+                                                        className: 'p-6 text-center text-gray-400'
+                                                    }, 'کوئی ڈیٹا موجود نہیں (No Data)')
+                                                )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            // CSV Download
+                            React.createElement('div', {
+                                className: 'bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex flex-col items-center'
+                            },
+                                React.createElement('div', { className: 'w-full max-w-xs' },
+                                    React.createElement('select', {
+                                        value: exportType,
+                                        onChange: e => setExportType(e.target.value),
+                                        className: 'w-full p-2 border rounded mb-2 text-xs bg-gray-50'
+                                    },
+                                        React.createElement('option', { value: 'current' }, "Export Today's Data"),
+                                        React.createElement('option', { value: 'all' }, 'Export All Data'),
+                                        React.createElement('option', { value: 'dateRange' }, 'Export Range')
+                                    ),
+                                    exportType === 'dateRange' && 
+                                        React.createElement('div', { className: 'flex gap-2 mb-2' },
+                                            React.createElement('input', {
+                                                type: 'date',
+                                                value: exportStartDate,
+                                                onChange: e => setExportStartDate(e.target.value),
+                                                className: 'border p-1 rounded text-xs w-full'
+                                            }),
+                                            React.createElement('input', {
+                                                type: 'date',
+                                                value: exportEndDate,
+                                                onChange: e => setExportEndDate(e.target.value),
+                                                className: 'border p-1 rounded text-xs w-full'
+                                            })
+                                        ),
+                                    React.createElement('button', {
+                                        onClick: downloadCSV,
+                                        className: 'w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded shadow transition-all flex justify-center items-center gap-2 text-sm'
+                                    },
+                                        React.createElement(FileDown, { size: 16 }),
+                                        'CSV ڈاؤن لوڈ'
+                                    )
+                                )
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'mt-8 text-center' },
+                            React.createElement('button', {
+                                onClick: () => { setDeleteMode('all'); setDeletePassword(''); setShowDeleteModal(true); },
+                                className: 'px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 mx-auto transition-colors border border-red-200'
+                            },
+                                React.createElement(Trash2, { size: 14 }),
+                                ' تمام ڈیٹا حذف کریں (Delete All)'
+                            )
+                        )
+                    ),
+
+                    // Delete Modal
+                    React.createElement(DeleteConfirmationModal, {
+                        isOpen: showDeleteModal,
+                        onClose: () => setShowDeleteModal(false),
+                        onConfirm: handleDeleteConfirm,
+                        password: deletePassword,
+                        setPassword: setDeletePassword,
+                        currentSeason,
+                        mode: deleteMode
+                    })
+                );
+            };
+
+            // Render the app
+            const root = createRoot(document.getElementById('root'));
+            root.render(React.createElement(App));
+        }).catch(error => {
+            console.error('Error loading modules:', error);
+            document.getElementById('root').innerHTML = `
+                <div class="min-h-screen flex items-center justify-center bg-red-50">
+                    <div class="text-center p-8">
+                        <h1 class="text-2xl font-bold text-red-600 mb-4">Error Loading Application</h1>
+                        <p class="text-gray-700">Failed to load required modules. Please check your internet connection and refresh the page.</p>
+                        <button onclick="window.location.reload()" class="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                            Refresh Page
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    </script>
+</body>
+</html>
