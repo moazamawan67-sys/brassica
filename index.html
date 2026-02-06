@@ -36,6 +36,21 @@
         /* Horizontal scroll for stacks */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Mobile responsive stacks */
+        @media (max-width: 640px) {
+            .stack-grid { 
+                display: grid; 
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); 
+                gap: 8px;
+                width: 100%;
+            }
+            .stack-item {
+                min-width: unset !important;
+                flex: 1;
+                max-width: 100%;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
@@ -47,19 +62,19 @@
             import('https://esm.sh/react@18.2.0'),
             import('https://esm.sh/react-dom@18.2.0/client'),
             import('https://esm.sh/@supabase/supabase-js@2.39.0'),
-            import('https://esm.sh/uuid@9.0.1'),
             import('https://esm.sh/lucide-react@0.300.0')
         ]).then(([
             { default: React, useState, useEffect, useMemo, useCallback, useRef },
             { createRoot },
             { createClient },
-            { v4: uuidv4 },
             lucideReact
         ]) => {
             // Extract icons from lucide-react
             const {
                 Trash2, Edit2, FileDown, Search, BarChart3, 
-                RotateCcw, X
+                RotateCcw, X, Loader2, Calendar, AlertCircle,
+                LogOut, User, Lock, Mail, Eye, EyeOff, Settings,
+                CheckCircle
             } = lucideReact;
 
             // --- CONSTANTS & CONFIG ---
@@ -68,6 +83,7 @@
             
             const DELETE_PASSWORD = 'delete123';
             const TABLE_NAME = 'mustard_husk_entries';
+            const APP_ID = 'mustard_husk_tracker';
 
             const SEASON_LABELS = {
                 'brassica': 'Brassica Straw',
@@ -78,7 +94,13 @@
             const STACK_OPTIONS = Array.from({ length: 50 }, (_, i) => String(i + 1));
 
             // --- SERVICES ---
-            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+                auth: {
+                    autoRefreshToken: true,
+                    persistSession: true,
+                    detectSessionInUrl: true
+                }
+            });
 
             // --- COMPONENTS ---
 
@@ -121,9 +143,13 @@
                         ),
                         React.createElement('div', { className: 'bg-white/10 p-4 rounded-xl backdrop-blur-sm' },
                             React.createElement('h3', { className: 'text-sm opacity-80 mb-2' }, 'کل Net Weight'),
-                            React.createElement('div', { className: 'text-2xl font-extrabold font-roboto' },
+                            React.createElement('div', { className: 'text-2xl font-extrabold font-roboto mb-1' },
                                 `${stats.totalNet.toLocaleString()} `,
-                                React.createElement('span', { className: 'text-lg opacity-60' }, 'kg')
+                                React.createElement('span', { className: 'text-lg opacity-80' }, 'kg')
+                            ),
+                            React.createElement('div', { className: 'text-lg font-bold bg-white/5 rounded-lg p-2 mt-2' },
+                                `${(stats.totalNet / 1000).toFixed(2)} `,
+                                React.createElement('span', { className: 'text-sm opacity-80' }, 'ٹن')
                             )
                         )
                     )
@@ -187,16 +213,284 @@
                 );
             };
 
+            // Login/Signup Component
+            const LoginSignupForm = ({ onLogin, loading, mode, setMode, authMessage }) => {
+                const [email, setEmail] = useState('');
+                const [password, setPassword] = useState('');
+                const [confirmPassword, setConfirmPassword] = useState('');
+                const [showPassword, setShowPassword] = useState(false);
+                const [error, setError] = useState(null);
+
+                const handleSubmit = async (e) => {
+                    e.preventDefault();
+                    setError(null);
+
+                    if (mode === 'signup' && password !== confirmPassword) {
+                        setError('پاسورڈ مماثل نہیں ہیں');
+                        return;
+                    }
+
+                    if (password.length < 6) {
+                        setError('پاسورڈ کم از کم 6 حروف کا ہونا چاہیے');
+                        return;
+                    }
+
+                    onLogin(email, password, mode);
+                };
+
+                return React.createElement('div', { className: 'min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-purple-100 p-4' },
+                    React.createElement('div', { className: 'bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md' },
+                        React.createElement('div', { className: 'text-center mb-8' },
+                            React.createElement('div', { className: 'inline-flex items-center justify-center w-16 h-16 bg-indigo-100 rounded-full mb-4' },
+                                React.createElement(Lock, { className: 'w-8 h-8 text-indigo-600' })
+                            ),
+                            React.createElement('h1', { className: 'text-2xl font-bold text-gray-800 mb-2' }, 'بلھے شاہ پیکجنگ ٹریکر'),
+                            React.createElement('p', { className: 'text-gray-600' }, mode === 'login' ? 'لاگ ان کریں' : 'نیا اکاؤنٹ بنائیں')
+                        ),
+
+                        authMessage && React.createElement('div', {
+                            className: `p-3 rounded-lg mb-6 text-center text-sm ${authMessage.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`
+                        }, authMessage.text),
+
+                        error && React.createElement('div', { className: 'bg-red-50 border border-red-200 rounded-lg p-3 mb-6 text-red-700 text-sm' },
+                            error
+                        ),
+
+                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-6' },
+                            React.createElement('div', null,
+                                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'ای میل'),
+                                React.createElement('div', { className: 'relative' },
+                                    React.createElement(Mail, { className: 'absolute right-3 top-3 w-5 h-5 text-gray-400' }),
+                                    React.createElement('input', {
+                                        type: 'email',
+                                        required: true,
+                                        placeholder: 'اپنا ای میل درج کریں',
+                                        value: email,
+                                        onChange: (e) => setEmail(e.target.value),
+                                        className: 'w-full p-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none'
+                                    })
+                                )
+                            ),
+
+                            React.createElement('div', null,
+                                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'پاسورڈ'),
+                                React.createElement('div', { className: 'relative' },
+                                    React.createElement(Lock, { className: 'absolute right-3 top-3 w-5 h-5 text-gray-400' }),
+                                    React.createElement('input', {
+                                        type: showPassword ? 'text' : 'password',
+                                        required: true,
+                                        placeholder: 'پاسورڈ درج کریں',
+                                        value: password,
+                                        onChange: (e) => setPassword(e.target.value),
+                                        className: 'w-full p-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none'
+                                    }),
+                                    React.createElement('button', {
+                                        type: 'button',
+                                        onClick: () => setShowPassword(!showPassword),
+                                        className: 'absolute left-3 top-3 text-gray-400 hover:text-gray-600'
+                                    },
+                                        showPassword ? React.createElement(EyeOff, { className: 'w-5 h-5' }) : React.createElement(Eye, { className: 'w-5 h-5' })
+                                    )
+                                )
+                            ),
+
+                            mode === 'signup' && React.createElement('div', null,
+                                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'پاسورڈ کی تصدیق'),
+                                React.createElement('div', { className: 'relative' },
+                                    React.createElement(Lock, { className: 'absolute right-3 top-3 w-5 h-5 text-gray-400' }),
+                                    React.createElement('input', {
+                                        type: showPassword ? 'text' : 'password',
+                                        required: true,
+                                        placeholder: 'پاسورڈ دوبارہ درج کریں',
+                                        value: confirmPassword,
+                                        onChange: (e) => setConfirmPassword(e.target.value),
+                                        className: 'w-full p-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none'
+                                    })
+                                )
+                            ),
+
+                            React.createElement('button', {
+                                type: 'submit',
+                                disabled: loading,
+                                className: `w-full py-3 px-4 rounded-lg font-bold text-white transition-colors flex items-center justify-center gap-2 ${
+                                    loading ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
+                                }`
+                            },
+                                loading ? 
+                                    React.createElement(Loader2, { className: 'w-5 h-5 animate-spin' }) :
+                                    React.createElement(React.Fragment, null,
+                                        mode === 'login' ? 'لاگ ان کریں' : 'اکاؤنٹ بنائیں',
+                                        React.createElement(User, { className: 'w-5 h-5' })
+                                    )
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'mt-6 text-center' },
+                            React.createElement('p', { className: 'text-gray-600' },
+                                mode === 'login' ? 'اکاؤنٹ نہیں ہے؟ ' : 'پہلے سے اکاؤنٹ ہے؟ ',
+                                React.createElement('button', {
+                                    onClick: () => {
+                                        setMode(mode === 'login' ? 'signup' : 'login');
+                                        setError(null);
+                                    },
+                                    className: 'text-indigo-600 hover:text-indigo-800 font-medium'
+                                },
+                                    mode === 'login' ? 'سائن اپ کریں' : 'لاگ ان کریں'
+                                )
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'mt-8 pt-6 border-t border-gray-200 text-center' },
+                            React.createElement('p', { className: 'text-sm text-gray-500' },
+                                'کسی بھی ڈیوائس سے اپنا ڈیٹا دیکھیں'
+                            ),
+                            mode === 'signup' && React.createElement('p', { className: 'text-xs text-gray-400 mt-2' },
+                                'ای میل کی تصدیق کی ضرورت نہیں ہے'
+                            )
+                        )
+                    )
+                );
+            };
+
+            // Profile Modal Component
+            const ProfileModal = ({ isOpen, onClose, user, onUpdatePassword }) => {
+                const [currentPassword, setCurrentPassword] = useState('');
+                const [newPassword, setNewPassword] = useState('');
+                const [confirmPassword, setConfirmPassword] = useState('');
+                const [loading, setLoading] = useState(false);
+                const [message, setMessage] = useState(null);
+
+                if (!isOpen) return null;
+
+                const handleUpdatePassword = async () => {
+                    if (newPassword !== confirmPassword) {
+                        setMessage({ type: 'error', text: 'نئے پاسورڈ مماثل نہیں ہیں' });
+                        return;
+                    }
+
+                    if (newPassword.length < 6) {
+                        setMessage({ type: 'error', text: 'نیا پاسورڈ کم از کم 6 حروف کا ہونا چاہیے' });
+                        return;
+                    }
+
+                    setLoading(true);
+                    setMessage(null);
+
+                    try {
+                        const { error } = await supabase.auth.updateUser({
+                            password: newPassword
+                        });
+
+                        if (error) throw error;
+
+                        setMessage({ type: 'success', text: 'پاسورڈ کامیابی سے تبدیل ہو گیا' });
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmPassword('');
+                    } catch (error) {
+                        setMessage({ type: 'error', text: error.message });
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
+                return React.createElement('div', { className: 'fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in' },
+                    React.createElement('div', { className: 'bg-white rounded-xl p-6 w-full max-w-md shadow-2xl' },
+                        React.createElement('div', { className: 'flex justify-between items-center mb-6' },
+                            React.createElement('h3', { className: 'text-xl font-bold text-gray-800 flex items-center gap-2' },
+                                React.createElement(User, { className: 'w-5 h-5' }),
+                                'پروفائل'
+                            ),
+                            React.createElement('button', {
+                                onClick: onClose,
+                                className: 'text-gray-400 hover:text-gray-600'
+                            },
+                                React.createElement(X, { className: 'w-5 h-5' })
+                            )
+                        ),
+
+                        React.createElement('div', { className: 'space-y-6' },
+                            React.createElement('div', { className: 'bg-gray-50 p-4 rounded-lg' },
+                                React.createElement('h4', { className: 'font-medium text-gray-700 mb-2' }, 'اکاؤنٹ کی معلومات'),
+                                React.createElement('div', { className: 'space-y-2' },
+                                    React.createElement('div', null,
+                                        React.createElement('p', { className: 'text-sm text-gray-500' }, 'ای میل'),
+                                        React.createElement('p', { className: 'font-medium' }, user.email)
+                                    ),
+                                    React.createElement('div', null,
+                                        React.createElement('p', { className: 'text-sm text-gray-500' }, 'آئی ڈی'),
+                                        React.createElement('p', { className: 'font-medium text-sm' }, user.id.substring(0, 8) + '...')
+                                    )
+                                )
+                            ),
+
+                            React.createElement('div', null,
+                                React.createElement('h4', { className: 'font-medium text-gray-700 mb-4 flex items-center gap-2' },
+                                    React.createElement(Settings, { className: 'w-5 h-5' }),
+                                    'پاسورڈ تبدیل کریں'
+                                ),
+                                React.createElement('div', { className: 'space-y-3' },
+                                    React.createElement('div', null,
+                                        React.createElement('label', { className: 'block text-sm text-gray-600 mb-1' }, 'نیا پاسورڈ'),
+                                        React.createElement('input', {
+                                            type: 'password',
+                                            value: newPassword,
+                                            onChange: (e) => setNewPassword(e.target.value),
+                                            placeholder: 'نیا پاسورڈ',
+                                            className: 'w-full p-2 border border-gray-300 rounded-lg'
+                                        })
+                                    ),
+                                    React.createElement('div', null,
+                                        React.createElement('label', { className: 'block text-sm text-gray-600 mb-1' }, 'پاسورڈ کی تصدیق'),
+                                        React.createElement('input', {
+                                            type: 'password',
+                                            value: confirmPassword,
+                                            onChange: (e) => setConfirmPassword(e.target.value),
+                                            placeholder: 'پاسورڈ دوبارہ درج کریں',
+                                            className: 'w-full p-2 border border-gray-300 rounded-lg'
+                                        })
+                                    )
+                                )
+                            ),
+
+                            message && React.createElement('div', {
+                                className: `p-3 rounded-lg text-sm ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`
+                            },
+                                message.text
+                            ),
+
+                            React.createElement('div', { className: 'flex gap-3' },
+                                React.createElement('button', {
+                                    onClick: onClose,
+                                    className: 'flex-1 bg-gray-500 text-white py-2 rounded-lg font-medium hover:bg-gray-600'
+                                }, 'بند کریں'),
+                                React.createElement('button', {
+                                    onClick: handleUpdatePassword,
+                                    disabled: loading || !newPassword || !confirmPassword,
+                                    className: `flex-1 py-2 rounded-lg font-medium ${
+                                        loading || !newPassword || !confirmPassword
+                                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                    }`
+                                },
+                                    loading ? 'براہ کرم انتظار کریں...' : 'پاسورڈ تبدیل کریں'
+                                )
+                            )
+                        )
+                    )
+                );
+            };
+
             // --- MAIN APP ---
 
             const App = () => {
-                const [userId] = useState(() => {
-                    const stored = localStorage.getItem('mustardHuskUserId');
-                    if (stored) return stored;
-                    const newId = uuidv4();
-                    localStorage.setItem('mustardHuskUserId', newId);
-                    return newId;
-                });
+                // Authentication states
+                const [user, setUser] = useState(null);
+                const [session, setSession] = useState(null);
+                const [authLoading, setAuthLoading] = useState(true);
+                const [authMode, setAuthMode] = useState('login');
+                const [showProfileModal, setShowProfileModal] = useState(false);
+                const [authMessage, setAuthMessage] = useState(null);
 
                 const [currentSeason, setCurrentSeason] = useState(() => {
                     const stored = localStorage.getItem('currentSeason');
@@ -205,6 +499,7 @@
 
                 const [entries, setEntries] = useState([]);
                 const [loading, setLoading] = useState(true);
+                const [submitting, setSubmitting] = useState(false);
                 const [message, setMessage] = useState(null);
 
                 const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -217,12 +512,19 @@
                 const [grossWt, setGrossWt] = useState('');
                 const [stackNo, setStackNo] = useState('1');
                 const [editingId, setEditingId] = useState(null);
+                const [rejectMode, setRejectMode] = useState(false);
 
                 const [showSearch, setShowSearch] = useState(false);
                 const [showSeasonSummary, setShowSeasonSummary] = useState(() => {
                     const stored = localStorage.getItem('showSeasonSummary');
                     return stored ? JSON.parse(stored) : true;
                 });
+                
+                const [showDailySummary, setShowDailySummary] = useState(() => {
+                    const stored = localStorage.getItem('showDailySummary');
+                    return stored ? JSON.parse(stored) : true;
+                });
+                
                 const [searchFilters, setSearchFilters] = useState({ date: '', epNo: '', stackNo: '' });
                 
                 const [displayType, setDisplayType] = useState('current');
@@ -235,6 +537,148 @@
                 const [exportEndDate, setExportEndDate] = useState('');
 
                 const seasonKey = useMemo(() => `${currentSeason.type}_${currentSeason.year}`, [currentSeason]);
+
+                // Check authentication state on load
+                useEffect(() => {
+                    const checkUser = async () => {
+                        setAuthLoading(true);
+                        try {
+                            // First check for existing session
+                            const { data: { session: existingSession } } = await supabase.auth.getSession();
+                            
+                            if (existingSession) {
+                                setSession(existingSession);
+                                setUser(existingSession.user);
+                                console.log('Existing session found:', existingSession.user.email);
+                            }
+                        } catch (error) {
+                            console.error('Auth init error:', error);
+                        } finally {
+                            setAuthLoading(false);
+                        }
+                    };
+
+                    checkUser();
+
+                    // Listen for auth changes
+                    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+                        console.log('Auth state changed:', event, session?.user?.email);
+                        setSession(session);
+                        setUser(session?.user || null);
+                        
+                        if (event === 'SIGNED_IN') {
+                            setAuthMessage({ type: 'success', text: 'کامیابی سے لاگ ان ہو گئے' });
+                            setTimeout(() => setAuthMessage(null), 3000);
+                        }
+                        if (event === 'SIGNED_OUT') {
+                            setAuthMessage({ type: 'info', text: 'لاگ آؤٹ ہو گئے' });
+                            setEntries([]);
+                            setTimeout(() => setAuthMessage(null), 3000);
+                        }
+                    });
+
+                    return () => subscription.unsubscribe();
+                }, []);
+
+                useEffect(() => {
+                    localStorage.setItem('showDailySummary', JSON.stringify(showDailySummary));
+                }, [showDailySummary]);
+
+                useEffect(() => {
+                    localStorage.setItem('showSeasonSummary', JSON.stringify(showSeasonSummary));
+                }, [showSeasonSummary]);
+
+                // Auto-set tare weight when in reject mode and gross weight changes
+                useEffect(() => {
+                    if (rejectMode && grossWt) {
+                        setTareWt(grossWt);
+                    }
+                }, [rejectMode, grossWt]);
+
+                // Handle login/signup
+                const handleAuth = async (email, password, mode) => {
+                    setSubmitting(true);
+                    setAuthMessage(null);
+
+                    try {
+                        if (mode === 'signup') {
+                            const { data, error } = await supabase.auth.signUp({
+                                email,
+                                password,
+                                options: {
+                                    emailRedirectTo: window.location.origin
+                                }
+                            });
+
+                            if (error) throw error;
+
+                            // Check if email confirmation is required
+                            if (data.user && data.session) {
+                                // Immediate sign in after signup
+                                setUser(data.user);
+                                setSession(data.session);
+                                setAuthMessage({ 
+                                    type: 'success', 
+                                    text: 'اکاؤنٹ کامیابی سے بن گیا اور آٹو لاگ ان ہو گئے!' 
+                                });
+                            } else if (data.user && !data.session) {
+                                // Email confirmation required
+                                setAuthMessage({ 
+                                    type: 'info', 
+                                    text: 'براہ کرم اپنے ای میل پر تصدیقی لنک پر کلک کریں۔' 
+                                });
+                                setAuthMode('login');
+                            }
+                        } else {
+                            const { data, error } = await supabase.auth.signInWithPassword({
+                                email,
+                                password,
+                            });
+
+                            if (error) throw error;
+
+                            setUser(data.user);
+                            setSession(data.session);
+                            setAuthMessage({ type: 'success', text: 'کامیابی سے لاگ ان ہو گئے' });
+                        }
+                    } catch (error) {
+                        console.error('Auth error:', error);
+                        
+                        // Better error messages
+                        let errorMessage = error.message;
+                        if (error.message.includes('Invalid login credentials')) {
+                            errorMessage = 'غلط ای میل یا پاسورڈ';
+                        } else if (error.message.includes('Email not confirmed')) {
+                            errorMessage = 'براہ کرم اپنے ای میل کی تصدیق کریں';
+                        } else if (error.message.includes('User already registered')) {
+                            errorMessage = 'یہ ای میل پہلے سے رجسٹرڈ ہے';
+                        }
+                        
+                        setAuthMessage({ 
+                            type: 'error', 
+                            text: mode === 'signup' 
+                                ? 'اکاؤنٹ بنانے میں ناکامی: ' + errorMessage 
+                                : 'لاگ ان میں ناکامی: ' + errorMessage 
+                        });
+                    } finally {
+                        setSubmitting(false);
+                    }
+                };
+
+                // Handle logout
+                const handleLogout = async () => {
+                    try {
+                        const { error } = await supabase.auth.signOut();
+                        if (error) throw error;
+                        setUser(null);
+                        setSession(null);
+                        setEntries([]);
+                        setAuthMessage({ type: 'info', text: 'لاگ آؤٹ ہو گئے' });
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                        setAuthMessage({ type: 'error', text: 'لاگ آؤٹ میں ناکامی: ' + error.message });
+                    }
+                };
 
                 const isValidWeight = (weight) => {
                     const w = Number(weight);
@@ -264,74 +708,62 @@
                 };
 
                 const fetchData = useCallback(async () => {
+                    if (!user) {
+                        setEntries([]);
+                        setLoading(false);
+                        return;
+                    }
+
                     setLoading(true);
                     try {
-                        console.log("Fetching data from Supabase...");
-                        console.log("User ID:", userId);
-                        console.log("Season Key:", seasonKey);
+                        console.log("Fetching data for user:", user.id);
                         
-                        // First, let's check if the table exists and what columns it has
                         const { data, error } = await supabase
                             .from(TABLE_NAME)
                             .select('*')
-                            .eq('user_id', userId)
+                            .eq('user_id', user.id)
                             .eq('season', seasonKey)
                             .order('ep_no', { ascending: true });
 
                         if (error) {
                             console.error("Supabase Error Details:", error);
-                            
-                            // If there's an error, try a simpler query to see what's wrong
-                            const { data: simpleData, error: simpleError } = await supabase
-                                .from(TABLE_NAME)
-                                .select('id')
-                                .limit(1);
-                                
-                            if (simpleError) {
-                                console.error("Simple query also failed:", simpleError);
-                                throw new Error(`Database error: ${simpleError.message}`);
-                            }
-                            
-                            console.log("Simple query succeeded, table exists");
-                            setEntries([]); // Set empty array if no data
-                            return;
+                            throw error;
                         }
                         
                         console.log("Fetched Data:", data);
                         setEntries(data || []);
                     } catch (err) {
                         console.error("Fetch Data Error:", err);
-                        setMessage({ type: 'error', text: 'ڈیٹا لوڈ کرنے میں ناکامی۔ ممکن ہے کہ ڈیٹا بیس میں کچھ مسئلہ ہے۔' });
-                        setEntries([]); // Set empty array on error
+                        setMessage({ 
+                            type: 'error', 
+                            text: 'ڈیٹا لوڈ کرنے میں ناکامی۔ ' + (err.message || 'براہ کرم صفحہ ریفریش کریں۔') 
+                        });
+                        setEntries([]);
                     } finally {
                         setLoading(false);
                     }
-                }, [userId, seasonKey]);
+                }, [user, seasonKey]);
 
                 useEffect(() => {
                     fetchData();
                     localStorage.setItem('currentSeason', JSON.stringify(currentSeason));
                 }, [fetchData, currentSeason]);
 
-                useEffect(() => {
-                    localStorage.setItem('showSeasonSummary', JSON.stringify(showSeasonSummary));
-                }, [showSeasonSummary]);
-
                 const stats = useMemo(() => {
                     const dailyEntries = entries.filter(e => e.date === date);
-                    const totalNet = entries.reduce((sum, e) => sum + e.net_wt, 0);
+                    const totalNet = entries.reduce((sum, e) => sum + (e.net_wt || 0), 0);
                     
                     const daily = dailyEntries.reduce((acc, e) => ({
-                        gross: acc.gross + e.gross_wt,
-                        tare: acc.tare + e.tare_wt,
-                        net: acc.net + e.net_wt,
+                        gross: acc.gross + (e.gross_wt || 0),
+                        tare: acc.tare + (e.tare_wt || 0),
+                        net: acc.net + (e.net_wt || 0),
                         count: acc.count + 1
                     }), { gross: 0, tare: 0, net: 0, count: 0 });
 
                     const stacks = entries.reduce((acc, e) => {
-                        const s = e.stack_no;
+                        const s = e.stack_no || '1';
                         if (!acc[s]) acc[s] = { net: 0, count: 0 };
-                        acc[s].net += e.net_wt;
+                        acc[s].net += e.net_wt || 0;
                         acc[s].count += 1;
                         return acc;
                     }, {});
@@ -354,9 +786,9 @@
                 const searchSummary = useMemo(() => {
                     if (searchResults.length === 0) return null;
                     return searchResults.reduce((acc, e) => ({
-                        gross: acc.gross + e.gross_wt,
-                        tare: acc.tare + e.tare_wt,
-                        net: acc.net + e.net_wt,
+                        gross: acc.gross + (e.gross_wt || 0),
+                        tare: acc.tare + (e.tare_wt || 0),
+                        net: acc.net + (e.net_wt || 0),
                         count: acc.count + 1
                     }), { gross: 0, tare: 0, net: 0, count: 0 });
                 }, [searchResults]);
@@ -386,7 +818,7 @@
                             .from(TABLE_NAME)
                             .delete()
                             .eq('id', itemToDelete)
-                            .eq('user_id', userId);
+                            .eq('user_id', user.id);
                         
                         if (error) throw error;
                         
@@ -410,7 +842,7 @@
                         const { error } = await supabase
                             .from(TABLE_NAME)
                             .delete()
-                            .eq('user_id', userId)
+                            .eq('user_id', user.id)
                             .eq('season', seasonKey);
                             
                         if (error) throw error;
@@ -427,18 +859,30 @@
 
                 const handleSubmit = async (e) => {
                     e.preventDefault();
-                    const tare = Number(tareWt);
+                    setSubmitting(true);
+                    
+                    const tare = rejectMode ? Number(grossWt) : Number(tareWt);
                     const gross = Number(grossWt);
-                    const net = gross - tare;
+                    const net = rejectMode ? 0 : gross - tare;
 
-                    if (!gross || !tare || gross <= tare) {
-                        setMessage({ type: 'error', text: 'وزن درست نہیں ہے۔ Gross وزن Tare سے زیادہ ہونا چاہیے۔' });
+                    if (!gross) {
+                        setMessage({ type: 'error', text: 'گراس وزن درج کریں۔' });
+                        setSubmitting(false);
                         return;
                     }
 
-                    if (!isValidWeight(gross) || !isValidWeight(tare) || !isValidWeight(net)) {
-                        setMessage({ type: 'error', text: 'تمام وزن 5 کے بند میں ہونے چاہئیں۔' });
-                        return;
+                    if (!rejectMode) {
+                        if (gross <= tare) {
+                            setMessage({ type: 'error', text: 'وزن درست نہیں ہے۔ Gross وزن Tare سے زیادہ ہونا چاہیے۔' });
+                            setSubmitting(false);
+                            return;
+                        }
+
+                        if (!isValidWeight(gross) || !isValidWeight(tare) || !isValidWeight(net)) {
+                            setMessage({ type: 'error', text: 'تمام وزن 5 کے بند میں ہونے چاہئیں۔' });
+                            setSubmitting(false);
+                            return;
+                        }
                     }
 
                     try {
@@ -450,10 +894,12 @@
                                     gross_wt: gross, 
                                     tare_wt: tare, 
                                     net_wt: net, 
-                                    stack_no: stackNo 
+                                    stack_no: stackNo,
+                                    rejected: rejectMode,
+                                    app_id: APP_ID
                                 })
                                 .eq('id', editingId)
-                                .eq('user_id', userId);
+                                .eq('user_id', user.id);
                                 
                             if (error) {
                                 console.error("Update Error Details:", error);
@@ -462,7 +908,7 @@
                             setMessage({ type: 'success', text: 'اپ ڈیٹ ہو گیا۔' });
                             setEditingId(null);
                         } else {
-                            const maxEp = entries.length > 0 ? Math.max(...entries.map(e => e.ep_no)) : 0;
+                            const maxEp = entries.length > 0 ? Math.max(...entries.map(e => e.ep_no || 0)) : 0;
                             const todayEntries = entries.filter(e => e.date === date);
                             const nextSr = todayEntries.length + 1;
 
@@ -473,10 +919,11 @@
                                 gross_wt: gross, 
                                 tare_wt: tare, 
                                 net_wt: net,
+                                rejected: rejectMode,
                                 stack_no: stackNo, 
                                 season: seasonKey, 
-                                user_id: userId, 
-                                app_id: 'mustard_husk_tracker',
+                                user_id: user.id,
+                                app_id: APP_ID,
                                 created_at: new Date().toISOString()
                             };
 
@@ -493,14 +940,17 @@
                             }
                             
                             console.log("Insert successful, returned data:", data);
-                            setMessage({ type: 'success', text: 'محفوظ ہو گیا۔' });
+                            setMessage({ type: 'success', text: rejectMode ? 'ریجیکٹ انٹری محفوظ ہو گئی۔' : 'محفوظ ہو گیا۔' });
                         }
                         setGrossWt(''); 
                         setTareWt('');
+                        setRejectMode(false);
                         fetchData();
                     } catch (err) {
                         console.error("Submit Error Details:", err);
                         setMessage({ type: 'error', text: 'غلطی: ' + err.message });
+                    } finally {
+                        setSubmitting(false);
                     }
                 };
 
@@ -528,16 +978,17 @@
                         return;
                     }
 
-                    const headers = ['SR No', 'Ep No', 'Date', 'Gross Wt', 'Tare Wt', 'Net Wt', 'Stack No', 'Season'];
+                    const headers = ['SR No', 'Ep No', 'Date', 'Gross Wt', 'Tare Wt', 'Net Wt', 'Stack No', 'Season', 'Status'];
                     const rows = dataToExport.map(e => [
-                        e.sr_no, 
-                        e.ep_no, 
+                        e.sr_no || 1, 
+                        e.ep_no || 1, 
                         formatDate(e.date), 
-                        e.gross_wt, 
-                        e.tare_wt, 
-                        e.net_wt, 
-                        e.stack_no, 
-                        SEASON_LABELS[e.season.split('_')[0]]
+                        e.gross_wt || 0, 
+                        e.tare_wt || 0, 
+                        e.net_wt || 0, 
+                        e.stack_no || '1', 
+                        SEASON_LABELS[e.season ? e.season.split('_')[0] : 'brassica'] || 'Unknown',
+                        e.rejected ? 'REJECTED' : 'ACCEPTED'
                     ]);
                     
                     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
@@ -563,19 +1014,40 @@
                 }, [entries, displayType, displayStartDate, displayEndDate, displayStack, date]);
 
                 const weightValidation = useMemo(() => ({
-                    tare: isValidWeight(tareWt),
-                    gross: isValidWeight(grossWt),
-                    net: isValidWeight(Number(grossWt) - Number(tareWt))
-                }), [tareWt, grossWt]);
+                    tare: rejectMode ? true : isValidWeight(tareWt),
+                    gross: rejectMode ? true : isValidWeight(grossWt),
+                    net: rejectMode ? true : isValidWeight(Number(grossWt) - Number(tareWt))
+                }), [tareWt, grossWt, rejectMode]);
 
-                // The main render function
+                // Show login form if not authenticated
+                if (authLoading) {
+                    return React.createElement('div', { className: 'min-h-screen flex items-center justify-center' },
+                        React.createElement('div', { className: 'text-center' },
+                            React.createElement(Loader2, { className: 'w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4' }),
+                            React.createElement('p', { className: 'text-gray-600' }, 'لوڈ ہو رہا ہے...')
+                        )
+                    );
+                }
+
+                if (!user) {
+                    return React.createElement(LoginSignupForm, {
+                        onLogin: handleAuth,
+                        loading: submitting,
+                        mode: authMode,
+                        setMode: setAuthMode,
+                        authMessage: authMessage
+                    });
+                }
+
+                // Main app for authenticated users
                 return React.createElement('div', { className: 'min-h-screen pb-12 font-roboto bg-gray-50 text-gray-800' },
                     // Header
                     React.createElement('header', { className: 'bg-gradient-to-r from-indigo-800 to-indigo-600 text-white p-4 shadow-lg mb-6 sticky top-0 z-40' },
                         React.createElement('div', { className: 'max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3' },
                             React.createElement('div', { className: 'text-center md:text-right' },
                                 React.createElement('h1', { className: 'text-xl font-bold font-nastaliq' }, 'بلھے شاہ پیکجنگ ٹریکر'),
-                                React.createElement('p', { className: 'text-sm opacity-80 mt-1' }, `${SEASON_LABELS[currentSeason.type]} ${currentSeason.year}`)
+                                React.createElement('p', { className: 'text-sm opacity-80 mt-1' }, `${SEASON_LABELS[currentSeason.type]} ${currentSeason.year}`),
+                                React.createElement('p', { className: 'text-xs opacity-60 mt-1' }, user.email)
                             ),
                             React.createElement('div', { className: 'flex flex-col md:flex-row gap-2 items-center' },
                                 React.createElement('div', { className: 'flex gap-2 bg-white/10 p-1 rounded-lg' },
@@ -607,11 +1079,34 @@
                                         ' سیزن'
                                     ),
                                     React.createElement('button', {
+                                        onClick: () => setShowDailySummary(!showDailySummary),
+                                        className: `px-3 py-1 rounded text-sm font-medium flex items-center gap-1 transition-colors ${showDailySummary ? 'bg-white text-indigo-800' : 'bg-indigo-700 hover:bg-indigo-600'}`
+                                    },
+                                        React.createElement(Calendar, { size: 16 }),
+                                        ' آج'
+                                    ),
+                                    React.createElement('button', {
                                         onClick: () => setShowSearch(!showSearch),
                                         className: `px-3 py-1 rounded text-sm font-medium flex items-center gap-1 transition-colors ${showSearch ? 'bg-white text-indigo-800' : 'bg-indigo-700 hover:bg-indigo-600'}`
                                     },
                                         React.createElement(Search, { size: 16 }),
                                         ' تلاش'
+                                    ),
+                                    // Profile button
+                                    React.createElement('button', {
+                                        onClick: () => setShowProfileModal(true),
+                                        className: 'px-3 py-1 rounded text-sm font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 transition-colors'
+                                    },
+                                        React.createElement(User, { size: 16 }),
+                                        'پروفائل'
+                                    ),
+                                    // Logout button
+                                    React.createElement('button', {
+                                        onClick: handleLogout,
+                                        className: 'px-3 py-1 rounded text-sm font-medium flex items-center gap-1 bg-red-500 hover:bg-red-600 transition-colors'
+                                    },
+                                        React.createElement(LogOut, { size: 16 }),
+                                        'لاگ آؤٹ'
                                     )
                                 )
                             )
@@ -620,7 +1115,7 @@
 
                     React.createElement('main', { className: 'max-w-6xl mx-auto px-4' },
                         message && React.createElement('div', {
-                            className: `p-3 rounded-lg mb-4 text-center text-sm font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2 ${message.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-green-100 text-green-700 border border-green-200'}`
+                            className: `p-3 rounded-lg mb-4 text-center text-sm font-bold shadow-sm animate-fade-in flex items-center justify-center gap-2 ${message.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : message.type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-blue-100 text-blue-700 border border-blue-200'}`
                         },
                             message.text,
                             React.createElement('button', {
@@ -639,12 +1134,16 @@
 
                         // Total Net Card
                         React.createElement('div', {
-                            className: 'bg-indigo-900 text-white rounded-xl p-4 shadow-lg mb-4 text-center transform hover:scale-[1.01] transition-transform'
+                            className: 'bg-gradient-to-r from-indigo-800 to-indigo-600 text-white rounded-xl p-4 shadow-lg mb-4 text-center transform hover:scale-[1.01] transition-transform'
                         },
                             React.createElement('h2', { className: 'text-lg opacity-80 mb-1' }, 'کل مجموعی وزن'),
-                            React.createElement('div', { className: 'text-4xl font-extrabold' },
+                            React.createElement('div', { className: 'text-4xl font-extrabold mb-2' },
                                 `${stats.totalNet.toLocaleString()} `,
-                                React.createElement('span', { className: 'text-xl opacity-60' }, 'kg')
+                                React.createElement('span', { className: 'text-xl opacity-80' }, 'kg')
+                            ),
+                            React.createElement('div', { className: 'text-2xl font-bold bg-white/10 rounded-lg p-2' },
+                                `${(stats.totalNet / 1000).toFixed(2)} `,
+                                React.createElement('span', { className: 'text-lg opacity-80' }, 'ٹن')
                             )
                         ),
 
@@ -729,6 +1228,7 @@
                                                 React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Gross'),
                                                 React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Tare'),
                                                 React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Stack'),
+                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Status'),
                                                 React.createElement('th', { className: 'p-2 text-center whitespace-nowrap' }, 'Act')
                                             )
                                         ),
@@ -736,7 +1236,7 @@
                                             searchResults.map(e => 
                                                 React.createElement('tr', {
                                                     key: e.id,
-                                                    className: 'hover:bg-amber-50/50 transition-colors'
+                                                    className: e.rejected ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-amber-50/50 transition-colors'
                                                 },
                                                     React.createElement('td', {
                                                         className: 'p-2 whitespace-nowrap font-bold'
@@ -748,17 +1248,26 @@
                                                         className: 'p-2 whitespace-nowrap text-gray-700'
                                                     }, e.date ? formatDate(e.date) : '-'),
                                                     React.createElement('td', {
-                                                        className: 'p-2 font-bold text-emerald-700 whitespace-nowrap'
-                                                    }, e.net_wt?.toLocaleString() || '-'),
+                                                        className: `p-2 font-bold whitespace-nowrap ${e.rejected ? 'text-red-600' : 'text-emerald-700'}`
+                                                    }, e.rejected ? 'R' : (e.net_wt || 0).toLocaleString()),
                                                     React.createElement('td', {
                                                         className: 'p-2 whitespace-nowrap text-gray-700'
-                                                    }, Number(e.gross_wt).toLocaleString()),
+                                                    }, Number(e.gross_wt || 0).toLocaleString()),
                                                     React.createElement('td', {
                                                         className: 'p-2 whitespace-nowrap text-gray-700'
-                                                    }, Number(e.tare_wt).toLocaleString()),
+                                                    }, Number(e.tare_wt || 0).toLocaleString()),
                                                     React.createElement('td', {
                                                         className: 'p-2 whitespace-nowrap'
-                                                    }, e.stack_no),
+                                                    }, e.stack_no || '1'),
+                                                    React.createElement('td', { className: 'p-2 text-center' },
+                                                        e.rejected ? 
+                                                            React.createElement('span', {
+                                                                className: 'bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-bold border border-red-200'
+                                                            }, 'ریجیکٹ') :
+                                                            React.createElement('span', {
+                                                                className: 'bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-bold border border-green-200'
+                                                            }, 'قبول')
+                                                    ),
                                                     React.createElement('td', {
                                                         className: 'p-2 text-center flex justify-center gap-2 whitespace-nowrap'
                                                     },
@@ -768,7 +1277,8 @@
                                                                 setDate(e.date); 
                                                                 setGrossWt(e.gross_wt.toString()); 
                                                                 setTareWt(e.tare_wt.toString()); 
-                                                                setStackNo(e.stack_no); 
+                                                                setStackNo(e.stack_no || '1'); 
+                                                                setRejectMode(e.rejected || false);
                                                                 setShowSearch(false);
                                                                 window.scrollTo({ top: 0, behavior: 'smooth' }); 
                                                             },
@@ -801,360 +1311,446 @@
                                 }, 'No records found matching these filters.')
                         ),
 
-                        React.createElement(StatsCards, {
-                            title: `آج کا خلاصہ (${formatDate(date)})`,
-                            colorClass: 'bg-blue-50 border-blue-200',
-                            gross: stats.daily.gross,
-                            tare: stats.daily.tare,
-                            net: stats.daily.net,
-                            entryCount: stats.daily.count
-                        }),
+                        loading ? 
+                            React.createElement('div', { className: 'flex justify-center items-center h-40' },
+                                React.createElement(Loader2, { className: 'w-8 h-8 text-indigo-500 animate-spin' })
+                            ) : 
+                            React.createElement(React.Fragment, null,
+                                // Daily summary
+                                showDailySummary && React.createElement(StatsCards, {
+                                    title: `آج کا خلاصہ (${formatDate(date)})`,
+                                    colorClass: 'bg-blue-50 border-blue-200',
+                                    gross: stats.daily.gross,
+                                    tare: stats.daily.tare,
+                                    net: stats.daily.net,
+                                    entryCount: stats.daily.count
+                                }),
 
-                        // Horizontal Stacks
-                        React.createElement('div', {
-                            className: 'bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100'
-                        },
-                            React.createElement('h3', {
-                                className: 'text-center font-bold text-indigo-900 border-b pb-2 mb-3 text-base'
-                            }, 'سٹاک نمبر'),
-                            React.createElement('div', { className: 'overflow-x-auto no-scrollbar' },
-                                React.createElement('div', { className: 'flex gap-3 pb-2 min-w-max' },
-                                    Object.entries(stats.stacks).sort((a,b) => Number(a[0])-Number(b[0])).map(([s, d]) =>
-                                        React.createElement('div', {
-                                            key: s,
-                                            className: 'bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-lg p-3 text-center min-w-[120px] flex-shrink-0 shadow-sm hover:shadow-md transition-shadow'
-                                        },
-                                            React.createElement('h4', {
-                                                className: 'text-purple-800 font-bold text-sm'
-                                            }, `Stack # ${s}`),
-                                            React.createElement('div', {
-                                                className: 'text-lg font-extrabold text-emerald-600'
-                                            }, d.net.toLocaleString()),
-                                            React.createElement('p', {
-                                                className: 'text-xs text-gray-500 mt-1'
-                                            }, `(${d.count} entries)`)
-                                        )
-                                    )
-                                )
-                            )
-                        ),
-
-                        React.createElement('div', { className: 'grid grid-cols-1 gap-6' },
-                            // Input Form
-                            React.createElement('div', {
-                                className: 'bg-white rounded-lg shadow-md p-4 border border-gray-100'
-                            },
-                                React.createElement('h2', {
-                                    className: 'text-lg font-bold mb-3 flex items-center gap-2'
+                                // Stacks
+                                React.createElement('div', {
+                                    className: 'bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-100'
                                 },
-                                    editingId ? 
-                                        React.createElement(Edit2, { size: 18, className: 'text-blue-500' }) : 
-                                        'نیا اندراج (New Entry)'
-                                ),
-                                
-                                React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' },
-                                    React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
-                                        React.createElement('div', null,
-                                            React.createElement('label', {
-                                                className: 'text-xs font-bold text-gray-600 block mb-1'
-                                            }, 'Date'),
-                                            React.createElement('input', {
-                                                type: 'date',
-                                                required: true,
-                                                value: date,
-                                                onChange: e => setDate(e.target.value),
-                                                className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
-                                            })
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('label', {
-                                                className: 'text-xs font-bold text-gray-600 block mb-1'
-                                            }, 'Stack'),
-                                            React.createElement('select', {
-                                                value: stackNo,
-                                                onChange: e => setStackNo(e.target.value),
-                                                className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
-                                            },
-                                                STACK_OPTIONS.map(o => 
-                                                    React.createElement('option', { key: o, value: o }, o)
+                                    React.createElement('h3', {
+                                        className: 'text-center font-bold text-indigo-900 border-b pb-2 mb-3 text-base'
+                                    }, 'سٹاک نمبر'),
+                                    React.createElement('div', { className: 'overflow-x-auto no-scrollbar' },
+                                        React.createElement('div', { 
+                                            className: 'stack-grid flex gap-3 pb-2 min-w-max md:flex'
+                                        },
+                                            Object.entries(stats.stacks).sort((a,b) => Number(a[0])-Number(b[0])).map(([s, d]) =>
+                                                React.createElement('div', {
+                                                    key: s,
+                                                    className: 'stack-item bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-100 rounded-lg p-3 text-center min-w-[120px] flex-shrink-0 shadow-sm hover:shadow-md transition-shadow'
+                                                },
+                                                    React.createElement('h4', {
+                                                        className: 'text-purple-800 font-bold text-sm'
+                                                    }, `Stack # ${s}`),
+                                                    React.createElement('div', {
+                                                        className: 'text-lg font-extrabold text-emerald-600'
+                                                    }, d.net.toLocaleString()),
+                                                    React.createElement('p', {
+                                                        className: 'text-xs text-gray-500 mt-1'
+                                                    }, `(${d.count} entries)`)
                                                 )
                                             )
                                         )
-                                    ),
-                                    React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
-                                        React.createElement('div', null,
-                                            React.createElement('label', {
-                                                className: 'text-xs font-bold text-gray-600 block mb-1'
-                                            }, 'Tare (kg)'),
-                                            React.createElement('input', {
-                                                type: 'number',
-                                                required: true,
-                                                placeholder: '0',
-                                                value: tareWt,
-                                                onChange: e => setTareWt(e.target.value),
-                                                className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
-                                                    tareWt && !weightValidation.tare ? 'border-red-300 bg-red-50 focus:ring-red-200' : 
-                                                    weightValidation.tare ? 'border-green-300 bg-green-50 focus:ring-green-200' : 'border-gray-300 bg-white focus:ring-indigo-200'
-                                                }`
-                                            }),
-                                            tareWt && !weightValidation.tare && 
-                                                React.createElement('p', {
-                                                    className: 'text-[10px] text-red-600 mt-1'
-                                                }, '❌ 5 کے بند میں')
-                                        ),
-                                        React.createElement('div', null,
-                                            React.createElement('label', {
-                                                className: 'text-xs font-bold text-gray-600 block mb-1'
-                                            }, 'Gross (kg)'),
-                                            React.createElement('input', {
-                                                type: 'number',
-                                                required: true,
-                                                placeholder: '0',
-                                                value: grossWt,
-                                                onChange: e => setGrossWt(e.target.value),
-                                                className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
-                                                    grossWt && !weightValidation.gross ? 'border-red-300 bg-red-50 focus:ring-red-200' : 
-                                                    weightValidation.gross ? 'border-green-300 bg-green-50 focus:ring-green-200' : 'border-gray-300 bg-white focus:ring-indigo-200'
-                                                }`
-                                            }),
-                                            grossWt && !weightValidation.gross && 
-                                                React.createElement('p', {
-                                                    className: 'text-[10px] text-red-600 mt-1'
-                                                }, '❌ 5 کے بند میں')
-                                        )
-                                    ),
-                                    
-                                    React.createElement('div', {
-                                        className: `p-3 text-center rounded-lg font-bold text-sm transition-colors ${
-                                            weightValidation.net ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
-                                        }`
-                                    },
-                                        `Net: ${(Number(grossWt)-Number(tareWt)).toLocaleString()} kg`,
-                                        weightValidation.net && 
-                                            React.createElement('span', { className: 'ml-2' }, '✅')
-                                    ),
-                                    
-                                    React.createElement('button', {
-                                        disabled: loading || !weightValidation.tare || !weightValidation.gross || !weightValidation.net,
-                                        className: `w-full py-3 rounded-lg font-bold shadow-md transition-all text-sm flex justify-center items-center gap-2 ${
-                                            (weightValidation.tare && weightValidation.gross && weightValidation.net) 
-                                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg' 
-                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                        }`
-                                    },
-                                        loading ? 'Processing...' : 'محفوظ کریں (Save)'
                                     )
-                                )
-                            ),
+                                ),
 
-                            // Data Display
-                            React.createElement('div', {
-                                className: 'bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden'
-                            },
-                                React.createElement('div', {
-                                    className: 'p-4 bg-gray-50 border-b flex flex-col md:flex-row justify-between items-center gap-3'
-                                },
-                                    React.createElement('div', null,
-                                        React.createElement('h2', {
-                                            className: 'font-bold text-indigo-900 text-base'
-                                        }, 'Data History'),
-                                        React.createElement('p', {
-                                            className: 'text-xs text-indigo-600 mt-1 font-bold'
-                                        }, getDisplayText())
-                                    ),
-                                    
+                                React.createElement('div', { className: 'grid grid-cols-1 gap-6' },
+                                    // Input Form
                                     React.createElement('div', {
-                                        className: 'flex flex-col gap-2 w-full md:w-auto'
+                                        className: 'bg-white rounded-lg shadow-md p-4 border border-gray-100'
                                     },
-                                        React.createElement('select', {
-                                            value: displayType,
-                                            onChange: e => setDisplayType(e.target.value),
-                                            className: 'p-2 border rounded text-xs bg-white focus:ring-1 focus:ring-indigo-500 outline-none'
+                                        React.createElement('h2', {
+                                            className: 'text-lg font-bold mb-3 flex items-center gap-2'
                                         },
-                                            React.createElement('option', { value: 'current' }, "Today's Data"),
-                                            React.createElement('option', { value: 'all' }, 'All Data'),
-                                            React.createElement('option', { value: 'dateRange' }, 'Date Range'),
-                                            React.createElement('option', { value: 'stack' }, 'By Stack')
+                                            editingId ? 
+                                                React.createElement(Edit2, { size: 18, className: 'text-blue-500' }) : 
+                                                'نیا اندراج (New Entry)'
                                         ),
-                                        displayType === 'dateRange' && 
-                                            React.createElement('div', {
-                                                className: 'flex gap-1 items-center bg-gray-100 p-1 rounded'
-                                            },
-                                                React.createElement('div', { className: 'flex flex-col w-full' },
-                                                    React.createElement('span', {
-                                                        className: 'text-[10px] text-gray-500 px-1'
-                                                    }, 'From'),
-                                                    React.createElement('input', {
-                                                        type: 'date',
-                                                        value: displayStartDate,
-                                                        onChange: e => setDisplayStartDate(e.target.value),
-                                                        className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
-                                                    })
-                                                ),
-                                                React.createElement('div', { className: 'flex flex-col w-full' },
-                                                    React.createElement('span', {
-                                                        className: 'text-[10px] text-gray-500 px-1'
-                                                    }, 'To'),
-                                                    React.createElement('input', {
-                                                        type: 'date',
-                                                        value: displayEndDate,
-                                                        onChange: e => setDisplayEndDate(e.target.value),
-                                                        className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
-                                                    })
+                                        
+                                        React.createElement('form', { onSubmit: handleSubmit, className: 'space-y-4' },
+                                            // Reject mode toggle button
+                                            React.createElement('div', { className: 'flex justify-center' },
+                                                React.createElement('button', {
+                                                    type: 'button',
+                                                    onClick: () => {
+                                                        setRejectMode(!rejectMode);
+                                                        if (!rejectMode && grossWt) {
+                                                            setTareWt(grossWt);
+                                                        }
+                                                    },
+                                                    className: `px-4 py-2 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${
+                                                        rejectMode 
+                                                            ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg' 
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`
+                                                },
+                                                    React.createElement(AlertCircle, { size: 18 }),
+                                                    rejectMode ? 'ریجیکٹ موڈ' : 'ریجیکٹ کریں',
+                                                    rejectMode && 
+                                                        React.createElement('span', { 
+                                                            className: 'bg-white text-red-600 text-xs px-2 py-0.5 rounded-full ml-1' 
+                                                        }, 'R')
                                                 )
                                             ),
-                                        displayType === 'stack' && 
-                                            React.createElement('select', {
-                                                value: displayStack,
-                                                onChange: e => setDisplayStack(e.target.value),
-                                                className: 'p-1 border rounded text-xs w-full'
-                                            },
-                                                React.createElement('option', { value: '' }, 'All Stacks'),
-                                                STACK_OPTIONS.map(o => 
-                                                    React.createElement('option', { key: o, value: o }, o)
-                                                )
-                                            )
-                                    )
-                                ),
-                                
-                                React.createElement('div', {
-                                    className: 'overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar'
-                                },
-                                    React.createElement('table', { className: 'w-full text-xs text-right' },
-                                        React.createElement('thead', {
-                                            className: 'bg-indigo-600 text-white font-bold border-b sticky top-0 z-10'
-                                        },
-                                            React.createElement('tr', null,
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'SR#'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Ep#'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Date'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Gross'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Tare'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Net'),
-                                                React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Stack'),
-                                                React.createElement('th', { className: 'p-2 text-center whitespace-nowrap' }, 'Action')
-                                            )
-                                        ),
-                                        React.createElement('tbody', { className: 'divide-y divide-gray-100' },
-                                            displayData.map(entry => 
-                                                React.createElement('tr', {
-                                                    key: entry.id,
-                                                    className: 'hover:bg-indigo-50/50 transition-colors'
-                                                },
-                                                    React.createElement('td', {
-                                                        className: 'p-2 font-bold text-gray-700 whitespace-nowrap'
-                                                    }, entry.sr_no),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 text-gray-500 whitespace-nowrap'
-                                                    }, entry.ep_no),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 whitespace-nowrap text-gray-700'
-                                                    }, entry.date ? formatDate(entry.date) : '-'),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 whitespace-nowrap text-gray-700'
-                                                    }, Number(entry.gross_wt).toLocaleString()),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 whitespace-nowrap text-gray-700'
-                                                    }, Number(entry.tare_wt).toLocaleString()),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 font-bold text-emerald-600 whitespace-nowrap'
-                                                    }, entry.net_wt.toLocaleString()),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 text-center whitespace-nowrap'
+
+                                            React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                                                React.createElement('div', null,
+                                                    React.createElement('label', {
+                                                        className: 'text-xs font-bold text-gray-600 block mb-1'
+                                                    }, 'Date'),
+                                                    React.createElement('input', {
+                                                        type: 'date',
+                                                        required: true,
+                                                        value: date,
+                                                        onChange: e => setDate(e.target.value),
+                                                        className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
+                                                    })
+                                                ),
+                                                React.createElement('div', null,
+                                                    React.createElement('label', {
+                                                        className: 'text-xs font-bold text-gray-600 block mb-1'
+                                                    }, 'Stack'),
+                                                    React.createElement('select', {
+                                                        value: stackNo,
+                                                        onChange: e => setStackNo(e.target.value),
+                                                        className: 'w-full p-2 bg-gray-50 border border-gray-300 rounded-lg font-bold text-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none'
                                                     },
-                                                        React.createElement('span', {
-                                                            className: 'bg-gray-100 px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-700 border border-gray-200'
-                                                        }, entry.stack_no)
-                                                    ),
-                                                    React.createElement('td', {
-                                                        className: 'p-2 flex justify-center gap-2 whitespace-nowrap'
-                                                    },
-                                                        React.createElement('button', {
-                                                            onClick: () => { 
-                                                                setEditingId(entry.id); 
-                                                                setDate(entry.date); 
-                                                                setGrossWt(entry.gross_wt.toString()); 
-                                                                setTareWt(entry.tare_wt.toString()); 
-                                                                setStackNo(entry.stack_no); 
-                                                                window.scrollTo({ top: 0, behavior: 'smooth' }); 
-                                                            },
-                                                            className: 'text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 p-1 rounded',
-                                                            title: 'Edit'
-                                                        },
-                                                            React.createElement(Edit2, { size: 16 })
-                                                        ),
-                                                        React.createElement('button', {
-                                                            type: 'button',
-                                                            onClick: (e) => handleDeleteClick(entry.id, e),
-                                                            className: 'text-red-500 hover:text-red-700 transition-colors bg-red-50 hover:bg-red-100 p-1 rounded',
-                                                            title: 'Delete'
-                                                        },
-                                                            React.createElement(Trash2, { size: 16 })
+                                                        STACK_OPTIONS.map(o => 
+                                                            React.createElement('option', { key: o, value: o }, o)
                                                         )
                                                     )
                                                 )
                                             ),
-                                            displayData.length === 0 && 
-                                                React.createElement('tr', null,
-                                                    React.createElement('td', {
-                                                        colSpan: 8,
-                                                        className: 'p-6 text-center text-gray-400'
-                                                    }, 'کوئی ڈیٹا موجود نہیں (No Data)')
+                                            React.createElement('div', { className: 'grid grid-cols-2 gap-3' },
+                                                React.createElement('div', null,
+                                                    React.createElement('label', {
+                                                        className: 'text-xs font-bold text-gray-600 block mb-1'
+                                                    }, 'Tare (kg)'),
+                                                    React.createElement('input', {
+                                                        type: 'number',
+                                                        required: !rejectMode,
+                                                        placeholder: rejectMode ? 'آٹو: Gross کے برابر' : '0',
+                                                        value: rejectMode ? grossWt : tareWt,
+                                                        readOnly: rejectMode,
+                                                        onChange: e => setTareWt(e.target.value),
+                                                        className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
+                                                            rejectMode 
+                                                                ? 'bg-gray-100 border-gray-400 text-gray-600 cursor-not-allowed'
+                                                                : tareWt && !weightValidation.tare 
+                                                                    ? 'border-red-300 bg-red-50 focus:ring-red-200' 
+                                                                    : weightValidation.tare 
+                                                                        ? 'border-green-300 bg-green-50 focus:ring-green-200' 
+                                                                        : 'border-gray-300 bg-white focus:ring-indigo-200'
+                                                        }`
+                                                    }),
+                                                    !rejectMode && tareWt && !weightValidation.tare && 
+                                                        React.createElement('p', {
+                                                            className: 'text-[10px] text-red-600 mt-1'
+                                                        }, '❌ 5 کے بند میں')
+                                                ),
+                                                React.createElement('div', null,
+                                                    React.createElement('label', {
+                                                        className: 'text-xs font-bold text-gray-600 block mb-1'
+                                                    }, 'Gross (kg)'),
+                                                    React.createElement('input', {
+                                                        type: 'number',
+                                                        required: true,
+                                                        placeholder: '0',
+                                                        value: grossWt,
+                                                        onChange: e => {
+                                                            setGrossWt(e.target.value);
+                                                            if (rejectMode) {
+                                                                setTareWt(e.target.value);
+                                                            }
+                                                        },
+                                                        className: `w-full p-2 border rounded-lg font-bold text-base focus:ring-2 outline-none ${
+                                                            grossWt && !rejectMode && !weightValidation.gross 
+                                                                ? 'border-red-300 bg-red-50 focus:ring-red-200' 
+                                                                : weightValidation.gross 
+                                                                    ? 'border-green-300 bg-green-50 focus:ring-green-200' 
+                                                                    : 'border-gray-300 bg-white focus:ring-indigo-200'
+                                                        }`
+                                                    }),
+                                                    grossWt && !rejectMode && !weightValidation.gross && 
+                                                        React.createElement('p', {
+                                                            className: 'text-[10px] text-red-600 mt-1'
+                                                        }, '❌ 5 کے بند میں')
                                                 )
+                                            ),
+                                            
+                                            React.createElement('div', {
+                                                className: `p-3 text-center rounded-lg font-bold text-sm transition-colors ${
+                                                    rejectMode 
+                                                        ? 'bg-red-100 text-red-800 border border-red-200' 
+                                                        : weightValidation.net 
+                                                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                                                            : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                                }`
+                                            },
+                                                rejectMode ? 
+                                                    React.createElement('div', null,
+                                                        'ریجیکٹ گاڑی: نیٹ وزن = 0',
+                                                        React.createElement('span', { className: 'ml-2 text-red-600' }, '🚫')
+                                                    ) : 
+                                                    React.createElement('div', null,
+                                                        `Net: ${(Number(grossWt)-Number(tareWt)).toLocaleString()} kg`,
+                                                        weightValidation.net && 
+                                                            React.createElement('span', { className: 'ml-2' }, '✅')
+                                                    )
+                                            ),
+                                            
+                                            React.createElement('button', {
+                                                type: 'submit',
+                                                disabled: submitting || (!rejectMode && (!weightValidation.tare || !weightValidation.gross || !weightValidation.net)),
+                                                className: `w-full py-3 rounded-lg font-bold shadow-md transition-all text-sm flex justify-center items-center gap-2 ${
+                                                    (rejectMode && grossWt) || (!rejectMode && weightValidation.tare && weightValidation.gross && weightValidation.net && !submitting)
+                                                        ? rejectMode 
+                                                            ? 'bg-red-600 text-white hover:bg-red-700 hover:shadow-lg' 
+                                                            : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg'
+                                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                }`
+                                            },
+                                                submitting ? 
+                                                    React.createElement(Loader2, { className: 'w-5 h-5 animate-spin' }) : 
+                                                    React.createElement(React.Fragment, null,
+                                                        rejectMode ? 
+                                                            React.createElement(React.Fragment, null,
+                                                                React.createElement(AlertCircle, { size: 18 }),
+                                                                'ریجیکٹ کے طور پر سیو کریں'
+                                                            ) : 
+                                                            (editingId ? 'اپ ڈیٹ کریں (Update)' : 'محفوظ کریں (Save)')
+                                                    )
+                                            )
+                                        )
+                                    ),
+
+                                    // Data Display
+                                    React.createElement('div', {
+                                        className: 'bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden'
+                                    },
+                                        React.createElement('div', {
+                                            className: 'p-4 bg-gray-50 border-b flex flex-col md:flex-row justify-between items-center gap-3'
+                                        },
+                                            React.createElement('div', null,
+                                                React.createElement('h2', {
+                                                    className: 'font-bold text-indigo-900 text-base'
+                                                }, 'Data History'),
+                                                React.createElement('p', {
+                                                    className: 'text-xs text-indigo-600 mt-1 font-bold'
+                                                }, getDisplayText())
+                                            ),
+                                            
+                                            React.createElement('div', {
+                                                className: 'flex flex-col gap-2 w-full md:w-auto'
+                                            },
+                                                React.createElement('select', {
+                                                    value: displayType,
+                                                    onChange: e => setDisplayType(e.target.value),
+                                                    className: 'p-2 border rounded text-xs bg-white focus:ring-1 focus:ring-indigo-500 outline-none'
+                                                },
+                                                    React.createElement('option', { value: 'current' }, "Today's Data"),
+                                                    React.createElement('option', { value: 'all' }, 'All Data'),
+                                                    React.createElement('option', { value: 'dateRange' }, 'Date Range'),
+                                                    React.createElement('option', { value: 'stack' }, 'By Stack')
+                                                ),
+                                                displayType === 'dateRange' && 
+                                                    React.createElement('div', {
+                                                        className: 'flex gap-1 items-center bg-gray-100 p-1 rounded'
+                                                    },
+                                                        React.createElement('div', { className: 'flex flex-col w-full' },
+                                                            React.createElement('span', {
+                                                                className: 'text-[10px] text-gray-500 px-1'
+                                                            }, 'From'),
+                                                            React.createElement('input', {
+                                                                type: 'date',
+                                                                value: displayStartDate,
+                                                                onChange: e => setDisplayStartDate(e.target.value),
+                                                                className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
+                                                            })
+                                                        ),
+                                                        React.createElement('div', { className: 'flex flex-col w-full' },
+                                                            React.createElement('span', {
+                                                                className: 'text-[10px] text-gray-500 px-1'
+                                                            }, 'To'),
+                                                            React.createElement('input', {
+                                                                type: 'date',
+                                                                value: displayEndDate,
+                                                                onChange: e => setDisplayEndDate(e.target.value),
+                                                                className: 'border p-1 rounded text-xs w-full outline-none focus:border-indigo-500'
+                                                            })
+                                                        )
+                                                    ),
+                                                displayType === 'stack' && 
+                                                    React.createElement('select', {
+                                                        value: displayStack,
+                                                        onChange: e => setDisplayStack(e.target.value),
+                                                        className: 'p-1 border rounded text-xs w-full'
+                                                    },
+                                                        React.createElement('option', { value: '' }, 'All Stacks'),
+                                                        STACK_OPTIONS.map(o => 
+                                                            React.createElement('option', { key: o, value: o }, o)
+                                                        )
+                                                    )
+                                            )
+                                        ),
+                                        
+                                        React.createElement('div', {
+                                            className: 'overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar'
+                                        },
+                                            React.createElement('table', { className: 'w-full text-xs text-right' },
+                                                React.createElement('thead', {
+                                                    className: 'bg-indigo-600 text-white font-bold border-b sticky top-0 z-10'
+                                                },
+                                                    React.createElement('tr', null,
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'SR#'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Ep#'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Date'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Gross'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Tare'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Net'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Stack'),
+                                                        React.createElement('th', { className: 'p-2 whitespace-nowrap' }, 'Status'),
+                                                        React.createElement('th', { className: 'p-2 text-center whitespace-nowrap' }, 'Action')
+                                                    )
+                                                ),
+                                                React.createElement('tbody', { className: 'divide-y divide-gray-100' },
+                                                    displayData.map(entry => 
+                                                        React.createElement('tr', {
+                                                            key: entry.id,
+                                                            className: entry.rejected ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-indigo-50/50 transition-colors'
+                                                        },
+                                                            React.createElement('td', {
+                                                                className: 'p-2 font-bold text-gray-700 whitespace-nowrap'
+                                                            }, entry.sr_no || 1),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 text-gray-500 whitespace-nowrap'
+                                                            }, entry.ep_no || 1),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 whitespace-nowrap text-gray-700'
+                                                            }, entry.date ? formatDate(entry.date) : '-'),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 whitespace-nowrap text-gray-700'
+                                                            }, Number(entry.gross_wt || 0).toLocaleString()),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 whitespace-nowrap text-gray-700'
+                                                            }, Number(entry.tare_wt || 0).toLocaleString()),
+                                                            React.createElement('td', {
+                                                                className: `p-2 font-bold whitespace-nowrap ${entry.rejected ? 'text-red-600' : 'text-emerald-600'}`
+                                                            }, entry.rejected ? 'R' : (entry.net_wt || 0).toLocaleString()),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 text-center whitespace-nowrap'
+                                                            },
+                                                                React.createElement('span', {
+                                                                    className: `px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                                                        entry.rejected 
+                                                                            ? 'bg-red-100 text-red-700 border-red-200' 
+                                                                            : 'bg-gray-100 text-gray-700 border-gray-200'
+                                                                    }`
+                                                                }, entry.stack_no || '1')
+                                                            ),
+                                                            React.createElement('td', { className: 'p-2 text-center' },
+                                                                entry.rejected ? 
+                                                                    React.createElement('span', {
+                                                                        className: 'bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-bold border border-red-200'
+                                                                    }, 'ریجیکٹ') :
+                                                                    React.createElement('span', {
+                                                                        className: 'bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-bold border border-green-200'
+                                                                    }, 'قبول')
+                                                            ),
+                                                            React.createElement('td', {
+                                                                className: 'p-2 flex justify-center gap-2 whitespace-nowrap'
+                                                            },
+                                                                React.createElement('button', {
+                                                                    onClick: () => { 
+                                                                        setEditingId(entry.id); 
+                                                                        setDate(entry.date); 
+                                                                        setGrossWt(entry.gross_wt.toString()); 
+                                                                        setTareWt(entry.tare_wt.toString()); 
+                                                                        setStackNo(entry.stack_no || '1'); 
+                                                                        setRejectMode(entry.rejected || false);
+                                                                        window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                                                                    },
+                                                                    className: 'text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 hover:bg-blue-100 p-1 rounded',
+                                                                    title: 'Edit'
+                                                                },
+                                                                    React.createElement(Edit2, { size: 16 })
+                                                                ),
+                                                                React.createElement('button', {
+                                                                    type: 'button',
+                                                                    onClick: (e) => handleDeleteClick(entry.id, e),
+                                                                    className: 'text-red-500 hover:text-red-700 transition-colors bg-red-50 hover:bg-red-100 p-1 rounded',
+                                                                    title: 'Delete'
+                                                                },
+                                                                    React.createElement(Trash2, { size: 16 })
+                                                                )
+                                                            )
+                                                        )
+                                                    ),
+                                                    displayData.length === 0 && 
+                                                        React.createElement('tr', null,
+                                                            React.createElement('td', {
+                                                                colSpan: 9,
+                                                                className: 'p-6 text-center text-gray-400'
+                                                            }, 'کوئی ڈیٹا موجود نہیں (No Data)')
+                                                        )
+                                                )
+                                            )
+                                        )
+                                    ),
+
+                                    // CSV Download
+                                    React.createElement('div', {
+                                        className: 'bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex flex-col items-center'
+                                    },
+                                        React.createElement('div', { className: 'w-full max-w-xs' },
+                                            React.createElement('select', {
+                                                value: exportType,
+                                                onChange: e => setExportType(e.target.value),
+                                                className: 'w-full p-2 border rounded mb-2 text-xs bg-gray-50'
+                                            },
+                                                React.createElement('option', { value: 'current' }, "Export Today's Data"),
+                                                React.createElement('option', { value: 'all' }, 'Export All Data'),
+                                                React.createElement('option', { value: 'dateRange' }, 'Export Range')
+                                            ),
+                                            exportType === 'dateRange' && 
+                                                React.createElement('div', { className: 'flex gap-2 mb-2' },
+                                                    React.createElement('input', {
+                                                        type: 'date',
+                                                        value: exportStartDate,
+                                                        onChange: e => setExportStartDate(e.target.value),
+                                                        className: 'border p-1 rounded text-xs w-full'
+                                                    }),
+                                                    React.createElement('input', {
+                                                        type: 'date',
+                                                        value: exportEndDate,
+                                                        onChange: e => setExportEndDate(e.target.value),
+                                                        className: 'border p-1 rounded text-xs w-full'
+                                                    })
+                                                ),
+                                            React.createElement('button', {
+                                                onClick: downloadCSV,
+                                                className: 'w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded shadow transition-all flex justify-center items-center gap-2 text-sm'
+                                            },
+                                                React.createElement(FileDown, { size: 16 }),
+                                                'CSV ڈاؤن لوڈ'
+                                            )
                                         )
                                     )
-                                )
-                            ),
+                                ),
 
-                            // CSV Download
-                            React.createElement('div', {
-                                className: 'bg-white rounded-lg shadow-sm border border-gray-100 p-4 flex flex-col items-center'
-                            },
-                                React.createElement('div', { className: 'w-full max-w-xs' },
-                                    React.createElement('select', {
-                                        value: exportType,
-                                        onChange: e => setExportType(e.target.value),
-                                        className: 'w-full p-2 border rounded mb-2 text-xs bg-gray-50'
-                                    },
-                                        React.createElement('option', { value: 'current' }, "Export Today's Data"),
-                                        React.createElement('option', { value: 'all' }, 'Export All Data'),
-                                        React.createElement('option', { value: 'dateRange' }, 'Export Range')
-                                    ),
-                                    exportType === 'dateRange' && 
-                                        React.createElement('div', { className: 'flex gap-2 mb-2' },
-                                            React.createElement('input', {
-                                                type: 'date',
-                                                value: exportStartDate,
-                                                onChange: e => setExportStartDate(e.target.value),
-                                                className: 'border p-1 rounded text-xs w-full'
-                                            }),
-                                            React.createElement('input', {
-                                                type: 'date',
-                                                value: exportEndDate,
-                                                onChange: e => setExportEndDate(e.target.value),
-                                                className: 'border p-1 rounded text-xs w-full'
-                                            })
-                                        ),
+                                React.createElement('div', { className: 'mt-8 text-center' },
                                     React.createElement('button', {
-                                        onClick: downloadCSV,
-                                        className: 'w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded shadow transition-all flex justify-center items-center gap-2 text-sm'
+                                        onClick: () => { setDeleteMode('all'); setDeletePassword(''); setShowDeleteModal(true); },
+                                        className: 'px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 mx-auto transition-colors border border-red-200'
                                     },
-                                        React.createElement(FileDown, { size: 16 }),
-                                        'CSV ڈاؤن لوڈ'
+                                        React.createElement(Trash2, { size: 14 }),
+                                        ' تمام ڈیٹا حذف کریں (Delete All)'
                                     )
                                 )
                             )
-                        ),
-
-                        React.createElement('div', { className: 'mt-8 text-center' },
-                            React.createElement('button', {
-                                onClick: () => { setDeleteMode('all'); setDeletePassword(''); setShowDeleteModal(true); },
-                                className: 'px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 bg-red-100 hover:bg-red-200 text-red-700 mx-auto transition-colors border border-red-200'
-                            },
-                                React.createElement(Trash2, { size: 14 }),
-                                ' تمام ڈیٹا حذف کریں (Delete All)'
-                            )
-                        )
                     ),
 
                     // Delete Modal
@@ -1166,6 +1762,14 @@
                         setPassword: setDeletePassword,
                         currentSeason,
                         mode: deleteMode
+                    }),
+
+                    // Profile Modal
+                    React.createElement(ProfileModal, {
+                        isOpen: showProfileModal,
+                        onClose: () => setShowProfileModal(false),
+                        user: user,
+                        onUpdatePassword: () => {}
                     })
                 );
             };
